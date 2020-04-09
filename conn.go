@@ -1,4 +1,4 @@
-package ge
+package gn
 
 import (
 	"log"

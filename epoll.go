@@ -1,6 +1,6 @@
 // +build linux
 
-package ge
+package gn
 
 import (
 	"golang.org/x/sys/unix"
