@@ -1,7 +1,9 @@
 package gn
 
 import (
+	"errors"
 	"io"
+	"strconv"
 	"sync"
 	"syscall"
 	"time"
@@ -19,6 +21,7 @@ type server struct {
 	epoll         *epoll                  // 系统相关网络模型
 	handler       Handler                 // 注册的处理
 	eventQueue    chan syscall.EpollEvent // 事件队列
+	gNum          int                     // 处理事件goroutine数量
 	conns         sync.Map                // TCP长连接管理
 	timeoutTicker time.Duration           // 超时时间检查间隔
 	timeout       int64                   // 超时时间(单位秒)
@@ -26,7 +29,20 @@ type server struct {
 }
 
 // NewServer 创建server服务器
-func NewServer(port int, handler Handler, headerLen, readMaxLen, writeLen int) (*server, error) {
+func NewServer(port int, handler Handler, headerLen, readMaxLen, writeLen, gNum int) (*server, error) {
+	if headerLen <= 0 {
+		return nil, errors.New("headerLen must be greater than 0")
+	}
+	if readMaxLen <= 0 {
+		return nil, errors.New("readMaxLen must be greater than 0")
+	}
+	if writeLen <= 0 {
+		return nil, errors.New("writeLen must be greater than 0")
+	}
+	if gNum <= 0 {
+		return nil, errors.New("gNum must be greater than 0")
+	}
+
 	InitCodec(headerLen, readMaxLen, writeLen)
 	lfd, err := syscall.Socket(syscall.AF_INET, syscall.SOCK_STREAM, 0)
 	if err != nil {
@@ -63,6 +79,7 @@ func NewServer(port int, handler Handler, headerLen, readMaxLen, writeLen int) (
 		epoll:      e,
 		handler:    handler,
 		eventQueue: make(chan syscall.EpollEvent, 1000),
+		gNum:       gNum,
 		timeout:    0,
 		stop:       make(chan int),
 	}, nil
@@ -106,7 +123,10 @@ func (s *server) startProducer() {
 
 // StartConsumer 启动消费者
 func (s *server) startConsumer() {
-	go s.consume()
+	for i := 0; i < s.gNum; i++ {
+		go s.consume()
+	}
+	Log.Info("consumer run by " + strconv.Itoa(s.gNum) + " goroutine")
 }
 
 // Consume 消费者
@@ -160,6 +180,7 @@ func (s *server) checkTimeout() {
 	if s.timeout == 0 || s.timeoutTicker == 0 {
 		return
 	}
+	Log.Info("check timeout goroutine run")
 	go func() {
 		ticker := time.NewTicker(s.timeoutTicker)
 		for {
