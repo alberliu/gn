@@ -31,6 +31,31 @@ func TestEpoll_Client(t *testing.T) {
 		return // 终止程序
 	}
 
+	codec := NewCodec(conn)
+
+	go func() {
+		for {
+			_, err = codec.Read()
+			if err != nil {
+				fmt.Println(err)
+				return
+			}
+			for {
+				bytes, ok, err := codec.Decode()
+				// 解码出错，需要中断连接
+				if err != nil {
+					fmt.Println(err)
+					return
+				}
+				if ok {
+					fmt.Println(string(bytes))
+					continue
+				}
+				break
+			}
+		}
+	}()
+
 	n, err := conn.Write(Encode([]byte("hello")))
 	if err != nil {
 		log.Println(err)
@@ -53,18 +78,6 @@ func TestEpoll_Client(t *testing.T) {
 		return
 	}
 	log.Println("write:", n)
-
-	go func() {
-		for {
-			var bytes = make([]byte, 100)
-			n, err := conn.Read(bytes)
-			if err != nil {
-				log.Println(err)
-				return
-			}
-			fmt.Println(string(bytes[0:n]))
-		}
-	}()
 
 	select {}
 }

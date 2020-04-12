@@ -18,14 +18,14 @@ type Handler interface {
 
 // server TCP服务
 type server struct {
-	epoll         *epoll                  // 系统相关网络模型
-	handler       Handler                 // 注册的处理
-	eventQueue    chan syscall.EpollEvent // 事件队列
-	gNum          int                     // 处理事件goroutine数量
-	conns         sync.Map                // TCP长连接管理
-	timeoutTicker time.Duration           // 超时时间检查间隔
-	timeout       int64                   // 超时时间(单位秒)
-	stop          chan int                // 服务器关闭信号
+	epoll         *epoll        // 系统相关网络模型
+	handler       Handler       // 注册的处理
+	eventQueue    chan event    // 事件队列
+	gNum          int           // 处理事件goroutine数量
+	conns         sync.Map      // TCP长连接管理
+	timeoutTicker time.Duration // 超时时间检查间隔
+	timeout       int64         // 超时时间(单位秒)
+	stop          chan int      // 服务器关闭信号
 }
 
 // NewServer 创建server服务器
@@ -78,7 +78,7 @@ func NewServer(port int, handler Handler, headerLen, readMaxLen, writeLen, gNum 
 	return &server{
 		epoll:      e,
 		handler:    handler,
-		eventQueue: make(chan syscall.EpollEvent, 1000),
+		eventQueue: make(chan event, 1000),
 		gNum:       gNum,
 		timeout:    0,
 		stop:       make(chan int),
@@ -133,8 +133,8 @@ func (s *server) startConsumer() {
 func (s *server) consume() {
 	for event := range s.eventQueue {
 		// 客户端请求建立连接
-		if event.Fd == int32(s.epoll.lfd) {
-			nfd, _, err := syscall.Accept(int(event.Fd))
+		if event.event == eventConn {
+			nfd, _, err := syscall.Accept(event.fd)
 			if err != nil {
 				Log.Error(err)
 				continue
@@ -145,18 +145,24 @@ func (s *server) consume() {
 				Log.Error(err)
 				continue
 			}
-			conn := newConn(int32(nfd), s)
-			s.conns.Store(int32(nfd), conn)
+			conn := newConn(nfd, s)
+			s.conns.Store(nfd, conn)
 			s.handler.OnConnect(conn)
 			continue
 		}
 
-		v, ok := s.conns.Load(event.Fd)
+		v, ok := s.conns.Load(event.fd)
 		if !ok {
-			Log.Error("not found in conns,", event.Fd)
+			Log.Error("not found in conns,", event.fd)
 			continue
 		}
 		c := v.(*Conn)
+
+		if event.event == eventClose {
+			c.Close()
+			s.handler.OnClose(c)
+			return
+		}
 
 		err := c.Read()
 		if err != nil {
@@ -192,8 +198,7 @@ func (s *server) checkTimeout() {
 					c := value.(*Conn)
 
 					if time.Now().Unix()-c.lastReadTime > s.timeout {
-						c.Close()
-						s.handler.OnClose(c)
+						s.eventQueue <- event{fd: int(c.fd), event: eventClose}
 					}
 					return true
 				})

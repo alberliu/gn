@@ -14,7 +14,7 @@ const (
 
 type epoll struct {
 	fd  int
-	lfd int
+	lfd int32
 }
 
 func EpollCreate() (*epoll, error) {
@@ -35,7 +35,7 @@ func (e *epoll) AddListener(fd int) error {
 	if err != nil {
 		return err
 	}
-	e.lfd = fd
+	e.lfd = int32(fd)
 	return nil
 }
 
@@ -65,7 +65,7 @@ func (e *epoll) RemoveAndClose(fd int) error {
 	return nil
 }
 
-func (e *epoll) EpollWait(eventQueue chan syscall.EpollEvent) error {
+func (e *epoll) EpollWait(eventQueue chan event) error {
 	events := make([]syscall.EpollEvent, 100)
 	n, err := syscall.EpollWait(e.fd, events, -1)
 	if err != nil {
@@ -73,7 +73,11 @@ func (e *epoll) EpollWait(eventQueue chan syscall.EpollEvent) error {
 	}
 
 	for i := 0; i < n; i++ {
-		eventQueue <- events[i]
+		if events[i].Fd == e.lfd {
+			eventQueue <- event{fd: int(events[i].Fd), event: eventConn}
+		} else {
+			eventQueue <- event{fd: int(events[i].Fd), event: eventIn}
+		}
 	}
 	return nil
 }

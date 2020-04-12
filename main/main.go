@@ -13,6 +13,7 @@ func (Handler) OnConnect(c *gn.Conn) {
 	log.Println("connect:", c.GetFd())
 }
 func (Handler) OnMessage(c *gn.Conn, bytes []byte) {
+	gn.EncodeToFD(c.GetFd(), bytes)
 	log.Println("read:", string(bytes))
 }
 func (Handler) OnClose(c *gn.Conn) {
@@ -25,6 +26,6 @@ func main() {
 		log.Panicln("err")
 		return
 	}
-	server.SetTimeout(1*time.Minute, 5*time.Minute)
+	server.SetTimeout(1*time.Second, 5*time.Minute)
 	server.Run()
 }

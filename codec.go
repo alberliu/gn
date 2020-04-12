@@ -65,7 +65,7 @@ func EncodeToFD(fd int, bytes []byte) error {
 	// 将消息内容内容写入buffer
 	copy(buffer[codecHeaderLen:], bytes)
 
-	_, err := syscall.Write(fd, bytes)
+	_, err := syscall.Write(fd, buffer)
 	return err
 }
 
