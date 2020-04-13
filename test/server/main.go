@@ -10,7 +10,7 @@ type Handler struct {
 }
 
 func (Handler) OnConnect(c *gn.Conn) {
-	log.Println("connect:", c.GetFd())
+	log.Println("connect:", c.GetFd(), c.GetAddr())
 }
 func (Handler) OnMessage(c *gn.Conn, bytes []byte) {
 	gn.EncodeToFD(c.GetFd(), bytes)

@@ -8,16 +8,17 @@ import (
 )
 
 var (
-	codecHeaderLen  int
-	codecReadMaxLen int
-	codecWriteLen   int
+	codecHeaderLen  int // TCP包的头部内容，用来描述这个包的字节长度
+	codecReadMaxLen int // 所读取的客户端包的最大长度，客户端发送的包不能超过这个长度
+	codecWriteLen   int // 服务器发送给客户端包的建议长度，当发送的包小于这个值时，会利用到内存池优化
 )
 
 var (
-	readBufferPool  *sync.Pool
-	writeBufferPool *sync.Pool
+	readBufferPool  *sync.Pool // 读缓存区内存池
+	writeBufferPool *sync.Pool // 写缓存区内存池
 )
 
+// InitCodec 初始化codec配置
 func InitCodec(headerLen, readMaxLen, writeLen int) {
 	codecHeaderLen = headerLen
 	codecReadMaxLen = readMaxLen

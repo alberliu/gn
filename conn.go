@@ -7,32 +7,37 @@ import (
 	"time"
 )
 
+// Conn 客户端长连接
 type Conn struct {
 	rm           sync.Mutex  // read锁
 	s            *server     // 服务器引用
 	fd           int         // 文件描述符
+	addr         string      // 对端地址
 	lastReadTime int64       // 最后一次读取数据的时间
 	extra        interface{} // 扩展字段
 }
 
-func newConn(fd int, s *server) *Conn {
+// newConn 创建tcp链接
+func newConn(fd int, addr string, s *server) *Conn {
 	return &Conn{
 		s:            s,
 		fd:           fd,
+		addr:         addr,
 		lastReadTime: time.Now().Unix(),
 	}
 }
 
-// 关闭连接
+// GetFd 获取文件描述符
 func (c *Conn) GetFd() int {
 	return c.fd
 }
 
-// 关闭连接
-func (c *Conn) GetRemoteIP() int {
-	return c.fd
+// GetAddr 获取客户端地址
+func (c *Conn) GetAddr() string {
+	return c.addr
 }
 
+// Read 读取数据
 func (c *Conn) Read() error {
 	c.rm.Lock()
 	defer c.rm.Unlock()
@@ -45,6 +50,7 @@ func (c *Conn) Read() error {
 	return nil
 }
 
+// Write 写入数据
 func (c *Conn) Write(bytes []byte) (int, error) {
 	return syscall.Write(int(c.fd), bytes)
 }

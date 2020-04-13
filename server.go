@@ -2,6 +2,7 @@ package gn
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"strconv"
 	"sync"
@@ -11,9 +12,9 @@ import (
 
 // Handler Server 注册接口
 type Handler interface {
-	OnConnect(c *Conn)
-	OnMessage(c *Conn, bytes []byte)
-	OnClose(c *Conn)
+	OnConnect(c *Conn)               // OnConnect 当TCP长连接建立成功是回调
+	OnMessage(c *Conn, bytes []byte) // OnMessage 当客户端有数据写入是回调
+	OnClose(c *Conn)                 // OnClose 当客户端主动断开链接或者超时时回调
 }
 
 // server TCP服务
@@ -134,7 +135,7 @@ func (s *server) consume() {
 	for event := range s.eventQueue {
 		// 客户端请求建立连接
 		if event.event == eventConn {
-			nfd, _, err := syscall.Accept(event.fd)
+			nfd, sa, err := syscall.Accept(event.fd)
 			if err != nil {
 				Log.Error(err)
 				continue
@@ -145,7 +146,7 @@ func (s *server) consume() {
 				Log.Error(err)
 				continue
 			}
-			conn := newConn(nfd, s)
+			conn := newConn(nfd, getIPPort(sa), s)
 			s.conns.Store(nfd, conn)
 			s.handler.OnConnect(conn)
 			continue
@@ -182,6 +183,12 @@ func (s *server) consume() {
 	}
 }
 
+func getIPPort(sa syscall.Sockaddr) string {
+	addr := sa.(*syscall.SockaddrInet4)
+	return fmt.Sprintf("%d.%d.%d.%d:%d", addr.Addr[0], addr.Addr[1], addr.Addr[2], addr.Addr[3], addr.Port)
+}
+
+// checkTimeout 定时检查超时的TCP长连接
 func (s *server) checkTimeout() {
 	if s.timeout == 0 || s.timeoutTicker == 0 {
 		return
