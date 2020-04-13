@@ -56,3 +56,14 @@ func (c *Codec) Decode() ([]byte, bool, error) {
 	}
 	return valueBuf, true, nil
 }
+
+// Encode 编码数据
+func Encode(bytes []byte) []byte {
+	l := len(bytes)
+	buffer := make([]byte, l+2)
+	// 将消息长度写入buffer
+	binary.BigEndian.PutUint16(buffer[0:2], uint16(l))
+	// 将消息内容内容写入buffer
+	copy(buffer[2:], bytes)
+	return buffer[0 : 2+l]
+}
