@@ -1,4 +1,4 @@
-package client
+package util
 
 import (
 	"encoding/binary"
@@ -21,7 +21,7 @@ type Codec struct {
 func NewCodec(conn net.Conn) *Codec {
 	return &Codec{
 		Conn:    conn,
-		ReadBuf: newBuffer(make([]byte, 1024)),
+		ReadBuf: newBuffer(make([]byte, maxLen)),
 	}
 }
 
