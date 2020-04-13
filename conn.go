@@ -55,10 +55,12 @@ func (c *Conn) Write(bytes []byte) (int, error) {
 	return syscall.Write(int(c.fd), bytes)
 }
 
+// GetData 获取数据
 func (c *Conn) GetData() interface{} {
 	return c.data
 }
 
+// SetData 设置数据
 func (c *Conn) SetData(data interface{}) {
 	c.data = data
 }
