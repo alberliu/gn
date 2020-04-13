@@ -14,7 +14,7 @@ type Conn struct {
 	fd           int         // 文件描述符
 	addr         string      // 对端地址
 	lastReadTime int64       // 最后一次读取数据的时间
-	extra        interface{} // 扩展字段
+	data         interface{} // 业务自定义数据，用作扩展
 }
 
 // newConn 创建tcp链接
@@ -53,6 +53,14 @@ func (c *Conn) Read() error {
 // Write 写入数据
 func (c *Conn) Write(bytes []byte) (int, error) {
 	return syscall.Write(int(c.fd), bytes)
+}
+
+func (c *Conn) GetData() interface{} {
+	return c.data
+}
+
+func (c *Conn) SetData(data interface{}) {
+	c.data = data
 }
 
 // Close 关闭连接

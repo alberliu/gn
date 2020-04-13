@@ -36,7 +36,7 @@ func main() {
 		log.Panicln("err")
 		return
 	}
-	server.SetTimeout(1*time.Second, 5*time.Minute)
+	server.SetTimeout(5*time.Minute, 10*time.Minute)
 	server.Run()
 }
 ```
