@@ -19,7 +19,7 @@ type Handler interface {
 
 // server TCP服务
 type Server struct {
-	epoll         *Epoll        // 系统相关网络模型
+	epoll         *epoll        // 系统相关网络模型
 	handler       Handler       // 注册的处理
 	eventQueue    chan event    // 事件队列
 	gNum          int           // 处理事件goroutine数量
