@@ -11,7 +11,7 @@ gn是一个基于linux下epoll的网络框架，目前只能运行在Linux下环
 package main
 
 import (
-	"gn"
+	"github/alberliu/gn"
 	"log"
 	"time"
 )
@@ -36,7 +36,7 @@ func main() {
 		log.Panicln("err")
 		return
 	}
-	server.SetTimeout(5*time.Minute, 10*time.Minute)
+	server.SetTimeout(1*time.Second, 5*time.Minute)
 	server.Run()
 }
 ```

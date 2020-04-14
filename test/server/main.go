@@ -1,7 +1,7 @@
 package main
 
 import (
-	"gn"
+	"github/alberliu/gn"
 	"log"
 	"time"
 )

@@ -1,4 +1,4 @@
-module gn
+module github/alberliu/gn
 
 go 1.12
 

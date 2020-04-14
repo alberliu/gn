@@ -1,7 +1,7 @@
 package main
 
 import (
-	"gn/test/util"
+	"github/alberliu/gn/test/util"
 	"log"
 	"net"
 	"strconv"
