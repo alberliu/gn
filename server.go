@@ -92,6 +92,15 @@ func (s *server) SetTimeout(ticker, timeout time.Duration) {
 	s.timeout = int64(timeout.Seconds())
 }
 
+// GetConn 获取Conn
+func (s *server) GetConn(fd int) (*Conn, bool) {
+	value, ok := s.conns.Load(fd)
+	if !ok {
+		return nil, false
+	}
+	return value.(*Conn), true
+}
+
 // Run 启动服务
 func (s *server) Run() {
 	Log.Info("ge server run")
