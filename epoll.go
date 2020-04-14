@@ -12,22 +12,22 @@ const (
 	EpollRead     = syscall.EPOLLIN | syscall.EPOLLPRI | syscall.EPOLLERR | syscall.EPOLLHUP | unix.EPOLLET
 )
 
-type epoll struct {
+type Epoll struct {
 	fd  int
 	lfd int32
 }
 
-func EpollCreate() (*epoll, error) {
+func EpollCreate() (*Epoll, error) {
 	fd, err := syscall.EpollCreate1(0)
 	if err != nil {
 		return nil, err
 	}
-	return &epoll{
+	return &Epoll{
 		fd: fd,
 	}, nil
 }
 
-func (e *epoll) AddListener(fd int) error {
+func (e *Epoll) AddListener(fd int) error {
 	err := syscall.EpollCtl(e.fd, syscall.EPOLL_CTL_ADD, fd, &syscall.EpollEvent{
 		Events: EpollListener,
 		Fd:     int32(fd),
@@ -39,7 +39,7 @@ func (e *epoll) AddListener(fd int) error {
 	return nil
 }
 
-func (e *epoll) AddRead(fd int) error {
+func (e *Epoll) AddRead(fd int) error {
 	err := syscall.EpollCtl(e.fd, syscall.EPOLL_CTL_ADD, fd, &syscall.EpollEvent{
 		Events: EpollRead,
 		Fd:     int32(fd),
@@ -50,7 +50,7 @@ func (e *epoll) AddRead(fd int) error {
 	return nil
 }
 
-func (e *epoll) RemoveAndClose(fd int) error {
+func (e *Epoll) RemoveAndClose(fd int) error {
 	// 移除文件描述符的监听
 	err := syscall.EpollCtl(e.fd, syscall.EPOLL_CTL_DEL, fd, nil)
 	if err != nil {
@@ -65,7 +65,7 @@ func (e *epoll) RemoveAndClose(fd int) error {
 	return nil
 }
 
-func (e *epoll) EpollWait(eventQueue chan event) error {
+func (e *Epoll) EpollWait(eventQueue chan event) error {
 	events := make([]syscall.EpollEvent, 100)
 	n, err := syscall.EpollWait(e.fd, events, -1)
 	if err != nil {
