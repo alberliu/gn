@@ -18,7 +18,7 @@ type Handler interface {
 }
 
 // server TCP服务
-type server struct {
+type Server struct {
 	epoll         *epoll        // 系统相关网络模型
 	handler       Handler       // 注册的处理
 	eventQueue    chan event    // 事件队列
@@ -30,7 +30,7 @@ type server struct {
 }
 
 // NewServer 创建server服务器
-func NewServer(port int, handler Handler, headerLen, readMaxLen, writeLen, gNum int) (*server, error) {
+func NewServer(port int, handler Handler, headerLen, readMaxLen, writeLen, gNum int) (*Server, error) {
 	if headerLen <= 0 {
 		return nil, errors.New("headerLen must be greater than 0")
 	}
@@ -76,7 +76,7 @@ func NewServer(port int, handler Handler, headerLen, readMaxLen, writeLen, gNum 
 	}
 
 	Log.Info("ge server init,listener port:", port)
-	return &server{
+	return &Server{
 		epoll:      e,
 		handler:    handler,
 		eventQueue: make(chan event, 1000),
@@ -87,13 +87,13 @@ func NewServer(port int, handler Handler, headerLen, readMaxLen, writeLen, gNum 
 }
 
 // SetTimeout 设置超时检查时间以及超时时间,默认不进行超时时间检查
-func (s *server) SetTimeout(ticker, timeout time.Duration) {
+func (s *Server) SetTimeout(ticker, timeout time.Duration) {
 	s.timeoutTicker = ticker
 	s.timeout = int64(timeout.Seconds())
 }
 
 // GetConn 获取Conn
-func (s *server) GetConn(fd int) (*Conn, bool) {
+func (s *Server) GetConn(fd int) (*Conn, bool) {
 	value, ok := s.conns.Load(fd)
 	if !ok {
 		return nil, false
@@ -102,7 +102,7 @@ func (s *server) GetConn(fd int) (*Conn, bool) {
 }
 
 // Run 启动服务
-func (s *server) Run() {
+func (s *Server) Run() {
 	Log.Info("ge server run")
 	s.startConsumer()
 	s.checkTimeout()
@@ -110,13 +110,13 @@ func (s *server) Run() {
 }
 
 // Run 启动服务
-func (s *server) Stop() {
+func (s *Server) Stop() {
 	close(s.stop)
 	close(s.eventQueue)
 }
 
 // StartProducer 启动生产者
-func (s *server) startProducer() {
+func (s *Server) startProducer() {
 	for {
 		select {
 		case <-s.stop:
@@ -132,7 +132,7 @@ func (s *server) startProducer() {
 }
 
 // StartConsumer 启动消费者
-func (s *server) startConsumer() {
+func (s *Server) startConsumer() {
 	for i := 0; i < s.gNum; i++ {
 		go s.consume()
 	}
@@ -140,7 +140,7 @@ func (s *server) startConsumer() {
 }
 
 // Consume 消费者
-func (s *server) consume() {
+func (s *Server) consume() {
 	for event := range s.eventQueue {
 		// 客户端请求建立连接
 		if event.event == eventConn {
@@ -198,7 +198,7 @@ func getIPPort(sa syscall.Sockaddr) string {
 }
 
 // checkTimeout 定时检查超时的TCP长连接
-func (s *server) checkTimeout() {
+func (s *Server) checkTimeout() {
 	if s.timeout == 0 || s.timeoutTicker == 0 {
 		return
 	}

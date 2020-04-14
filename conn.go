@@ -10,7 +10,7 @@ import (
 // Conn 客户端长连接
 type Conn struct {
 	rm           sync.Mutex  // read锁
-	s            *server     // 服务器引用
+	s            *Server     // 服务器引用
 	fd           int         // 文件描述符
 	addr         string      // 对端地址
 	lastReadTime int64       // 最后一次读取数据的时间
@@ -18,7 +18,7 @@ type Conn struct {
 }
 
 // newConn 创建tcp链接
-func newConn(fd int, addr string, s *server) *Conn {
+func newConn(fd int, addr string, s *Server) *Conn {
 	return &Conn{
 		s:            s,
 		fd:           fd,
