@@ -79,5 +79,6 @@ func (e *epoll) EpollWait(eventQueue chan event) error {
 			eventQueue <- event{fd: int(events[i].Fd), event: eventIn}
 		}
 	}
+
 	return nil
 }
