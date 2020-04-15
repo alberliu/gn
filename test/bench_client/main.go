@@ -8,12 +8,12 @@ import (
 	"time"
 )
 
-// 50000 *5 *60
+// 20000 *5 / 300
 
 func main() {
 	var conns []net.Conn
-	for i := 0; i < 1000; i++ {
-		conn, err := net.Dial("tcp", "127.0.0.1:8085")
+	for i := 0; i < 20000; i++ {
+		conn, err := net.Dial("tcp", "172.16.186.91:80")
 		if err != nil {
 			log.Println("error dialing", err.Error())
 			continue
@@ -29,8 +29,11 @@ func main() {
 
 	for {
 		for i := range conns {
-			time.Sleep(time.Millisecond)
-			conns[i].Write(util.Encode([]byte(strconv.FormatInt(time.Now().UnixNano(), 10))))
+			time.Sleep(time.Millisecond * 3)
+			_, err := conns[i].Write(util.Encode([]byte(strconv.FormatInt(time.Now().UnixNano(), 10))))
+			if err != nil {
+				log.Println("error dialing", err.Error())
+			}
 		}
 	}
 
@@ -46,13 +49,13 @@ func handleConn(conn net.Conn) {
 			return
 		}
 		for {
-			bytes, ok, err := codec.Decode()
+			_, ok, err := codec.Decode()
 			if err != nil {
 				log.Println("error", err)
 				return
 			}
 			if ok {
-				log.Println(string(bytes))
+				//log.Println(string(bytes))
 				continue
 			}
 			break

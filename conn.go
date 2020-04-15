@@ -42,6 +42,7 @@ func (c *Conn) Read() error {
 	c.rm.Lock()
 	defer c.rm.Unlock()
 
+	c.lastReadTime = time.Now().Unix()
 	err := Decode(c)
 	if err != nil {
 		return err
