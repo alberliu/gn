@@ -21,7 +21,7 @@ func (Handler) OnClose(c *gn.Conn) {
 }
 
 func main() {
-	server, err := gn.NewServer(8080, &Handler{}, 2, 1024, 1024, 10)
+	server, err := gn.NewServer(8080, &Handler{}, 2, 1024, 1024, 1000)
 	if err != nil {
 		log.Panicln("err")
 		return
