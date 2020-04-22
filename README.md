@@ -11,7 +11,7 @@ gn是一个基于linux下epoll的网络框架，目前只能运行在Linux下环
 package main
 
 import (
-	"github/alberliu/gn"
+	"github.com/alberliu/gn"
 	"log"
 	"time"
 )
@@ -26,17 +26,17 @@ func (Handler) OnMessage(c *gn.Conn, bytes []byte) {
 	gn.EncodeToFD(c.GetFd(), bytes)
 	log.Println("read:", string(bytes))
 }
-func (Handler) OnClose(c *gn.Conn) {
+func (Handler) OnClose(c *gn.Conn, err error) {
 	log.Println("close:", c.GetFd())
 }
 
 func main() {
-	server, err := gn.NewServer(8080, &Handler{}, 2, 1024, 1024, 10)
+	server, err := gn.NewServer(80, &Handler{}, 2, 1024, 1024, 1000)
 	if err != nil {
 		log.Panicln("err")
 		return
 	}
-	server.SetTimeout(1*time.Second, 5*time.Minute)
+	server.SetTimeout(5*time.Minute, 10*time.Minute)
 	server.Run()
 }
 ```
