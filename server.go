@@ -3,18 +3,21 @@ package gn
 import (
 	"errors"
 	"fmt"
-	"io"
 	"strconv"
 	"sync"
 	"syscall"
 	"time"
 )
 
+var (
+	ErrReadTimeout = errors.New("tcp read timeout")
+)
+
 // Handler Server 注册接口
 type Handler interface {
 	OnConnect(c *Conn)               // OnConnect 当TCP长连接建立成功是回调
 	OnMessage(c *Conn, bytes []byte) // OnMessage 当客户端有数据写入是回调
-	OnClose(c *Conn)                 // OnClose 当客户端主动断开链接或者超时时回调
+	OnClose(c *Conn, err error)      // OnClose 当客户端主动断开链接或者超时时回调,err返回关闭的原因
 }
 
 // server TCP服务
@@ -170,24 +173,20 @@ func (s *Server) consume() {
 
 		if event.event == eventClose {
 			c.Close()
-			s.handler.OnClose(c)
+			s.handler.OnClose(c, ErrReadTimeout)
 			return
 		}
 
 		err := c.Read()
 		if err != nil {
-			// 客户端关闭连接
-			if err == io.EOF {
-				c.Close()
-				s.handler.OnClose(c)
-				continue
-			}
 			// 服务端关闭连接
 			if err == syscall.EBADF {
 				continue
 			}
-			// 其他错误
-			Log.Error(err)
+			c.Close()
+			s.handler.OnClose(c, err)
+
+			Log.Debug(err)
 		}
 	}
 }
