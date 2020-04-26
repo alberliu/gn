@@ -174,7 +174,7 @@ func (s *Server) consume() {
 		if event.event == eventClose {
 			c.Close()
 			s.handler.OnClose(c, ErrReadTimeout)
-			return
+			continue
 		}
 
 		err := c.Read()

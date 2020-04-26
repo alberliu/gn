@@ -13,7 +13,7 @@ import (
 func main() {
 	var conns []net.Conn
 	for i := 0; i < 20000; i++ {
-		conn, err := net.Dial("tcp", "172.16.186.92:80")
+		conn, err := net.Dial("tcp", "172.16.58.235:80")
 		if err != nil {
 			log.Println("error dialing", err.Error())
 			continue

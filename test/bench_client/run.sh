@@ -2,7 +2,7 @@ REPLICAS=$1
 
 for (( c=0; c<${REPLICAS}; c++ ))
 do
-    docker run -v $(pwd)/:/client --name 1mclient_$c -d alpine .//app/main
+    docker run -v $(pwd)/:/client --name 1mclient_$c -d alpine .//client/client
 done
 
 

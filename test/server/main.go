@@ -10,14 +10,14 @@ type Handler struct {
 }
 
 func (Handler) OnConnect(c *gn.Conn) {
-	log.Println("connect:", c.GetFd(), c.GetAddr())
+	//log.Println("connect:", c.GetFd(), c.GetAddr())
 }
 func (Handler) OnMessage(c *gn.Conn, bytes []byte) {
 	gn.EncodeToFD(c.GetFd(), bytes)
-	log.Println("read:", string(bytes))
+	//log.Println("read:", string(bytes))
 }
 func (Handler) OnClose(c *gn.Conn, err error) {
-	log.Println("close:", c.GetFd())
+	//log.Println("close:", c.GetFd())
 }
 
 func main() {
