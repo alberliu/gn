@@ -3,6 +3,7 @@ package gn
 import (
 	"log"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 )
@@ -76,5 +77,6 @@ func (c *Conn) Close() error {
 
 	// 从conns中删除conn
 	c.s.conns.Delete(c.fd)
+	atomic.AddInt64(&c.s.connsNum, -1)
 	return nil
 }

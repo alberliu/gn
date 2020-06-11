@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 )
@@ -27,6 +28,7 @@ type Server struct {
 	eventQueue    chan event    // 事件队列
 	gNum          int           // 处理事件goroutine数量
 	conns         sync.Map      // TCP长连接管理
+	connsNum      int64         // 当前建立的长连接数量
 	timeoutTicker time.Duration // 超时时间检查间隔
 	timeout       int64         // 超时时间(单位秒)
 	stop          chan int      // 服务器关闭信号
@@ -112,6 +114,11 @@ func (s *Server) Run() {
 	s.startProducer()
 }
 
+// GetConnsNum 获取当前长连接的数量
+func (s *Server) GetConnsNum() int64 {
+	return atomic.LoadInt64(&s.connsNum)
+}
+
 // Run 启动服务
 func (s *Server) Stop() {
 	close(s.stop)
@@ -160,6 +167,7 @@ func (s *Server) consume() {
 			}
 			conn := newConn(nfd, getIPPort(sa), s)
 			s.conns.Store(nfd, conn)
+			atomic.AddInt64(&s.connsNum, 1)
 			s.handler.OnConnect(conn)
 			continue
 		}
