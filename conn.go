@@ -1,7 +1,6 @@
 package gn
 
 import (
-	"log"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -12,24 +11,24 @@ import (
 type Conn struct {
 	rm           sync.Mutex  // read锁
 	s            *Server     // 服务器引用
-	fd           int         // 文件描述符
+	fd           int32       // 文件描述符
 	addr         string      // 对端地址
-	lastReadTime int64       // 最后一次读取数据的时间
+	lastReadTime time.Time   // 最后一次读取数据的时间
 	data         interface{} // 业务自定义数据，用作扩展
 }
 
 // newConn 创建tcp链接
-func newConn(fd int, addr string, s *Server) *Conn {
+func newConn(fd int32, addr string, s *Server) *Conn {
 	return &Conn{
 		s:            s,
 		fd:           fd,
 		addr:         addr,
-		lastReadTime: time.Now().Unix(),
+		lastReadTime: time.Now(),
 	}
 }
 
 // GetFd 获取文件描述符
-func (c *Conn) GetFd() int {
+func (c *Conn) GetFd() int32 {
 	return c.fd
 }
 
@@ -43,7 +42,7 @@ func (c *Conn) Read() error {
 	c.rm.Lock()
 	defer c.rm.Unlock()
 
-	c.lastReadTime = time.Now().Unix()
+	c.lastReadTime = time.Now()
 	err := Decode(c)
 	if err != nil {
 		return err
@@ -72,7 +71,7 @@ func (c *Conn) Close() error {
 	// 从epoll监听的文件描述符中删除
 	err := c.s.epoll.RemoveAndClose(int(c.fd))
 	if err != nil {
-		log.Println(err)
+		log.Error(err)
 	}
 
 	// 从conns中删除conn

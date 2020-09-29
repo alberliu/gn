@@ -65,7 +65,7 @@ func (e *epoll) RemoveAndClose(fd int) error {
 	return nil
 }
 
-func (e *epoll) EpollWait(eventQueue chan event) error {
+func (e *epoll) EpollWait(handler func(event Event)) error {
 	events := make([]syscall.EpollEvent, 100)
 	n, err := syscall.EpollWait(e.fd, events, -1)
 	if err != nil {
@@ -74,11 +74,16 @@ func (e *epoll) EpollWait(eventQueue chan event) error {
 
 	for i := 0; i < n; i++ {
 		if events[i].Fd == e.lfd {
-			eventQueue <- event{fd: int(events[i].Fd), event: eventConn}
+			handler(Event{
+				Fd:   events[i].Fd,
+				Type: EventConn,
+			})
 		} else {
-			eventQueue <- event{fd: int(events[i].Fd), event: eventIn}
+			handler(Event{
+				Fd:   events[i].Fd,
+				Type: EventIn,
+			})
 		}
 	}
-
 	return nil
 }

@@ -21,11 +21,10 @@ func (Handler) OnClose(c *gn.Conn, err error) {
 }
 
 func main() {
-	server, err := gn.NewServer(80, &Handler{}, 2, 1024, 1024, 1000)
+	server, err := gn.NewServer(8080, &Handler{}, gn.WithTimeout(1*time.Second, 5*time.Second))
 	if err != nil {
 		log.Panicln("err")
 		return
 	}
-	server.SetTimeout(5*time.Minute, 10*time.Minute)
 	server.Run()
 }
