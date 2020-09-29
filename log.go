@@ -7,7 +7,11 @@ import (
 	"time"
 )
 
-var Log logger = newDefaultLog()
+var log logger = newDefaultLog()
+
+func SetLogger(l logger) {
+	log = l
+}
 
 type logger interface {
 	Error(args ...interface{})

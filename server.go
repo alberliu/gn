@@ -3,6 +3,7 @@ package gn
 import (
 	"errors"
 	"fmt"
+	"runtime"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -21,80 +22,181 @@ type Handler interface {
 	OnClose(c *Conn, err error)      // OnClose 当客户端主动断开链接或者超时时回调,err返回关闭的原因
 }
 
+// options Server初始化参数
+type options struct {
+	headerLen     int           // 数据包头部大小,默认值是2
+	readMaxLen    int           // 所读取的客户端包的最大长度，客户端发送的包不能超过这个长度，默认值是1024字节
+	writeLen      int           // 服务器发送给客户端包的建议长度，当发送的包小于这个值时，会利用到内存池优化，默认值是1024字节
+	acceptGNum    int           // 处理接受请求的goroutine数量
+	ioGNum        int           // 处理io的goroutine数量
+	timeoutTicker time.Duration // 超时时间检查间隔
+	timeout       time.Duration // 超时时间
+}
+
+type Option interface {
+	apply(*options)
+}
+
+type funcServerOption struct {
+	f func(*options)
+}
+
+func (fdo *funcServerOption) apply(do *options) {
+	fdo.f(do)
+}
+
+func newFuncServerOption(f func(*options)) *funcServerOption {
+	return &funcServerOption{
+		f: f,
+	}
+}
+
+// WithHeaderLen 设置数据包头部字节大小
+func WithHeaderLen(len int) Option {
+	return newFuncServerOption(func(o *options) {
+		if len <= 0 {
+			panic("acceptGNum must greater than 0")
+		}
+		o.headerLen = len
+	})
+}
+
+// WithReadMaxLen 设置所读取的客户端包的最大长度
+func WithReadMaxLen(len int) Option {
+	return newFuncServerOption(func(o *options) {
+		if len <= 0 {
+			panic("acceptGNum must greater than 0")
+		}
+		o.readMaxLen = len
+	})
+}
+
+// WithWriteLen 设置服务器发送给客户端包的建议长度
+func WithWriteLen(len int) Option {
+	return newFuncServerOption(func(o *options) {
+		if len <= 0 {
+			panic("acceptGNum must greater than 0")
+		}
+		o.writeLen = len
+	})
+}
+
+// WithAcceptGNum 设置建立连接的goroutine数量
+func WithAcceptGNum(num int) Option {
+	return newFuncServerOption(func(o *options) {
+		if num <= 0 {
+			panic("acceptGNum must greater than 0")
+		}
+		o.acceptGNum = num
+	})
+}
+
+// WithIOGNum 设置处理IO的goroutine数量
+func WithIOGNum(num int) Option {
+	return newFuncServerOption(func(o *options) {
+		if num <= 0 {
+			panic("IOGNum must greater than 0")
+		}
+		o.acceptGNum = num
+	})
+}
+
+// WithTimeout 设置TCP超时检查的间隔时间以及超时时间
+func WithTimeout(timeoutTicker, timeout time.Duration) Option {
+	return newFuncServerOption(func(o *options) {
+		if timeoutTicker <= 0 {
+			panic("timeoutTicker must greater than 0")
+		}
+		if timeout <= 0 {
+			panic("timeoutTicker must greater than 0")
+		}
+
+		o.timeoutTicker = timeoutTicker
+		o.timeout = timeout
+	})
+}
+
+func getOptions(opts ...Option) *options {
+	cpuNum := runtime.NumCPU()
+	options := &options{
+		headerLen:     2,
+		readMaxLen:    1024,
+		writeLen:      1024,
+		acceptGNum:    cpuNum,
+		ioGNum:        cpuNum,
+		timeoutTicker: 0,
+		timeout:       0,
+	}
+
+	for _, o := range opts {
+		o.apply(options)
+	}
+	return options
+}
+
 // server TCP服务
 type Server struct {
-	epoll         *epoll        // 系统相关网络模型
-	handler       Handler       // 注册的处理
-	eventQueue    chan event    // 事件队列
-	gNum          int           // 处理事件goroutine数量
-	conns         sync.Map      // TCP长连接管理
-	connsNum      int64         // 当前建立的长连接数量
-	timeoutTicker time.Duration // 超时时间检查间隔
-	timeout       int64         // 超时时间(单位秒)
-	stop          chan int      // 服务器关闭信号
+	options           *options     // 服务参数
+	epoll             *epoll       // 系统相关网络模型
+	handler           Handler      // 注册的处理
+	connectEventQueue chan Event   // connect事件队列
+	ioEventQueues     []chan Event // IO事件队列集合
+	ioQueueNum        int32        // IO事件队列集合数量
+	conns             sync.Map     // TCP长连接管理
+	connsNum          int64        // 当前建立的长连接数量
+	stop              chan int     // 服务器关闭信号
 }
 
 // NewServer 创建server服务器
-func NewServer(port int, handler Handler, headerLen, readMaxLen, writeLen, gNum int) (*Server, error) {
-	if headerLen <= 0 {
-		return nil, errors.New("headerLen must be greater than 0")
-	}
-	if readMaxLen <= 0 {
-		return nil, errors.New("readMaxLen must be greater than 0")
-	}
-	if writeLen <= 0 {
-		return nil, errors.New("writeLen must be greater than 0")
-	}
-	if gNum <= 0 {
-		return nil, errors.New("gNum must be greater than 0")
-	}
+func NewServer(port int, handler Handler, opts ...Option) (*Server, error) {
+	options := getOptions(opts...)
 
-	InitCodec(headerLen, readMaxLen, writeLen)
+	InitCodec(options.headerLen, options.readMaxLen, options.writeLen)
+
 	lfd, err := syscall.Socket(syscall.AF_INET, syscall.SOCK_STREAM, 0)
 	if err != nil {
-		Log.Error(err)
+		log.Error(err)
 		return nil, err
 	}
-
 	err = syscall.Bind(lfd, &syscall.SockaddrInet4{Port: port})
 	if err != nil {
-		Log.Error(err)
+		log.Error(err)
 		return nil, err
 	}
-
 	err = syscall.Listen(lfd, 1024)
 	if err != nil {
-		Log.Error(err)
+		log.Error(err)
 		return nil, err
 	}
-
 	e, err := EpollCreate()
 	if err != nil {
-		Log.Error(err)
+		log.Error(err)
 		return nil, err
 	}
-
 	e.AddListener(lfd)
 	if err != nil {
-		Log.Error(err)
+		log.Error(err)
 		return nil, err
 	}
 
-	Log.Info("ge server init,listener port:", port)
-	return &Server{
-		epoll:      e,
-		handler:    handler,
-		eventQueue: make(chan event, 1000),
-		gNum:       gNum,
-		timeout:    0,
-		stop:       make(chan int),
-	}, nil
-}
+	log.Info("ge server init,listener port:", port)
 
-// SetTimeout 设置超时检查时间以及超时时间,默认不进行超时时间检查
-func (s *Server) SetTimeout(ticker, timeout time.Duration) {
-	s.timeoutTicker = ticker
-	s.timeout = int64(timeout.Seconds())
+	ioEventQueues := make([]chan Event, options.ioGNum)
+	for i := range ioEventQueues {
+		ioEventQueues[i] = make(chan Event, 1024)
+	}
+
+	return &Server{
+		options:           options,
+		epoll:             e,
+		handler:           handler,
+		connectEventQueue: make(chan Event, 1024),
+		ioEventQueues:     ioEventQueues,
+		ioQueueNum:        int32(options.ioGNum),
+		conns:             sync.Map{},
+		connsNum:          0,
+		stop:              make(chan int),
+	}, nil
 }
 
 // GetConn 获取Conn
@@ -108,7 +210,7 @@ func (s *Server) GetConn(fd int) (*Conn, bool) {
 
 // Run 启动服务
 func (s *Server) Run() {
-	Log.Info("ge server run")
+	log.Info("ge server run")
 	s.startConsumer()
 	s.checkTimeout()
 	s.startProducer()
@@ -122,7 +224,21 @@ func (s *Server) GetConnsNum() int64 {
 // Run 启动服务
 func (s *Server) Stop() {
 	close(s.stop)
-	close(s.eventQueue)
+	close(s.connectEventQueue)
+	for _, queue := range s.ioEventQueues {
+		close(queue)
+	}
+}
+
+// HandleEvent
+func (s *Server) HandleEvent(event Event) {
+	if event.Type == EventConn {
+		s.connectEventQueue <- event
+		return
+	}
+
+	index := event.Fd % s.ioQueueNum
+	s.ioEventQueues[index] <- event
 }
 
 // StartProducer 启动生产者
@@ -130,12 +246,12 @@ func (s *Server) startProducer() {
 	for {
 		select {
 		case <-s.stop:
-			Log.Error("stop producer")
+			log.Error("stop producer")
 			return
 		default:
-			err := s.epoll.EpollWait(s.eventQueue)
+			err := s.epoll.EpollWait(s.HandleEvent)
 			if err != nil {
-				Log.Error(err)
+				log.Error(err)
 			}
 		}
 	}
@@ -143,43 +259,51 @@ func (s *Server) startProducer() {
 
 // StartConsumer 启动消费者
 func (s *Server) startConsumer() {
-	for i := 0; i < s.gNum; i++ {
-		go s.consume()
+	for i := 0; i < s.options.acceptGNum; i++ {
+		go s.consumeConnectEvent()
 	}
-	Log.Info("consumer run by " + strconv.Itoa(s.gNum) + " goroutine")
+	log.Info("consume connect event run by " + strconv.Itoa(s.options.acceptGNum) + " goroutine")
+
+	for _, queue := range s.ioEventQueues {
+		go s.consumeIOEvent(queue)
+	}
+	log.Info("consume io event run by " + strconv.Itoa(s.options.ioGNum) + " goroutine")
 }
 
-// Consume 消费者
-func (s *Server) consume() {
-	for event := range s.eventQueue {
-		// 客户端请求建立连接
-		if event.event == eventConn {
-			nfd, sa, err := syscall.Accept(event.fd)
-			if err != nil {
-				Log.Error(err)
-				continue
-			}
-
-			err = s.epoll.AddRead(nfd)
-			if err != nil {
-				Log.Error(err)
-				continue
-			}
-			conn := newConn(nfd, getIPPort(sa), s)
-			s.conns.Store(nfd, conn)
-			atomic.AddInt64(&s.connsNum, 1)
-			s.handler.OnConnect(conn)
+// consumeAcceptEvent 消费连接事件
+func (s *Server) consumeConnectEvent() {
+	for event := range s.connectEventQueue {
+		nfd, sa, err := syscall.Accept(int(event.Fd))
+		if err != nil {
+			log.Error(err)
 			continue
 		}
 
-		v, ok := s.conns.Load(event.fd)
+		fd := int32(nfd)
+		conn := newConn(fd, getIPPort(sa), s)
+		s.conns.Store(fd, conn)
+		atomic.AddInt64(&s.connsNum, 1)
+		s.handler.OnConnect(conn)
+
+		err = s.epoll.AddRead(nfd)
+		if err != nil {
+			log.Error(err)
+			continue
+		}
+	}
+}
+
+// ConsumeIO 消费IO事件
+func (s *Server) consumeIOEvent(queue chan Event) {
+	for event := range queue {
+		v, ok := s.conns.Load(event.Fd)
 		if !ok {
-			Log.Error("not found in conns,", event.fd)
+			log.Error("not found in conns,", event.Fd)
 			continue
 		}
 		c := v.(*Conn)
 
-		if event.event == eventClose {
+		if event.Type == EventClose {
 			c.Close()
 			s.handler.OnClose(c, ErrReadTimeout)
 			continue
@@ -194,7 +318,7 @@ func (s *Server) consume() {
 			c.Close()
 			s.handler.OnClose(c, err)
 
-			Log.Debug(err)
+			log.Debug(err)
 		}
 	}
 }
@@ -206,12 +330,12 @@ func getIPPort(sa syscall.Sockaddr) string {
 
 // checkTimeout 定时检查超时的TCP长连接
 func (s *Server) checkTimeout() {
-	if s.timeout == 0 || s.timeoutTicker == 0 {
+	if s.options.timeout == 0 || s.options.timeoutTicker == 0 {
 		return
 	}
-	Log.Info("check timeout goroutine run")
+	log.Info("check timeout goroutine run")
 	go func() {
-		ticker := time.NewTicker(s.timeoutTicker)
+		ticker := time.NewTicker(s.options.timeoutTicker)
 		for {
 			select {
 			case <-s.stop:
@@ -220,8 +344,8 @@ func (s *Server) checkTimeout() {
 				s.conns.Range(func(key, value interface{}) bool {
 					c := value.(*Conn)
 
-					if time.Now().Unix()-c.lastReadTime > s.timeout {
-						s.eventQueue <- event{fd: int(c.fd), event: eventClose}
+					if time.Now().Sub(c.lastReadTime) > s.options.timeout {
+						s.HandleEvent(Event{Fd: c.fd, Type: EventClose})
 					}
 					return true
 				})
