@@ -51,36 +51,6 @@ func newFuncServerOption(f func(*options)) *funcServerOption {
 	}
 }
 
-// WithHeaderLen 设置数据包头部字节大小
-func WithHeaderLen(len int) Option {
-	return newFuncServerOption(func(o *options) {
-		if len <= 0 {
-			panic("acceptGNum must greater than 0")
-		}
-		o.headerLen = len
-	})
-}
-
-// WithReadMaxLen 设置所读取的客户端包的最大长度
-func WithReadMaxLen(len int) Option {
-	return newFuncServerOption(func(o *options) {
-		if len <= 0 {
-			panic("acceptGNum must greater than 0")
-		}
-		o.readMaxLen = len
-	})
-}
-
-// WithWriteLen 设置服务器发送给客户端包的建议长度
-func WithWriteLen(len int) Option {
-	return newFuncServerOption(func(o *options) {
-		if len <= 0 {
-			panic("acceptGNum must greater than 0")
-		}
-		o.writeLen = len
-	})
-}
-
 // WithAcceptGNum 设置建立连接的goroutine数量
 func WithAcceptGNum(num int) Option {
 	return newFuncServerOption(func(o *options) {
@@ -134,11 +104,23 @@ func getOptions(opts ...Option) *options {
 	return options
 }
 
+const (
+	EventConn  = 1 // 请求建立连接
+	EventIn    = 2 // 数据流入
+	EventClose = 3 // 断开连接
+)
+
+type Event struct {
+	Fd   int32 // 文件描述符
+	Type int32 // 时间类型
+}
+
 // server TCP服务
 type Server struct {
 	options           *options     // 服务参数
 	epoll             *epoll       // 系统相关网络模型
 	handler           Handler      // 注册的处理
+	decoder           Decoder      // 解码器
 	connectEventQueue chan Event   // connect事件队列
 	ioEventQueues     []chan Event // IO事件队列集合
 	ioQueueNum        int32        // IO事件队列集合数量
@@ -148,38 +130,14 @@ type Server struct {
 }
 
 // NewServer 创建server服务器
-func NewServer(port int, handler Handler, opts ...Option) (*Server, error) {
+func NewServer(port int, handler Handler, decoder Decoder, opts ...Option) (*Server, error) {
 	options := getOptions(opts...)
 
-	InitCodec(options.headerLen, options.readMaxLen, options.writeLen)
-
-	lfd, err := syscall.Socket(syscall.AF_INET, syscall.SOCK_STREAM, 0)
+	epoll, err := EpollCreate(port)
 	if err != nil {
 		log.Error(err)
 		return nil, err
 	}
-	err = syscall.Bind(lfd, &syscall.SockaddrInet4{Port: port})
-	if err != nil {
-		log.Error(err)
-		return nil, err
-	}
-	err = syscall.Listen(lfd, 1024)
-	if err != nil {
-		log.Error(err)
-		return nil, err
-	}
-	e, err := EpollCreate()
-	if err != nil {
-		log.Error(err)
-		return nil, err
-	}
-	e.AddListener(lfd)
-	if err != nil {
-		log.Error(err)
-		return nil, err
-	}
-
-	log.Info("ge server init,listener port:", port)
 
 	ioEventQueues := make([]chan Event, options.ioGNum)
 	for i := range ioEventQueues {
@@ -188,8 +146,9 @@ func NewServer(port int, handler Handler, opts ...Option) (*Server, error) {
 
 	return &Server{
 		options:           options,
-		epoll:             e,
+		epoll:             epoll,
 		handler:           handler,
+		decoder:           decoder,
 		connectEventQueue: make(chan Event, 1024),
 		ioEventQueues:     ioEventQueues,
 		ioQueueNum:        int32(options.ioGNum),

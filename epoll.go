@@ -17,26 +17,42 @@ type epoll struct {
 	lfd int32
 }
 
-func EpollCreate() (*epoll, error) {
-	fd, err := syscall.EpollCreate1(0)
+func EpollCreate(port int) (*epoll, error) {
+	lfd, err := syscall.Socket(syscall.AF_INET, syscall.SOCK_STREAM, 0)
 	if err != nil {
+		log.Error(err)
 		return nil, err
 	}
-	return &epoll{
-		fd: fd,
-	}, nil
-}
+	err = syscall.Bind(lfd, &syscall.SockaddrInet4{Port: port})
+	if err != nil {
+		log.Error(err)
+		return nil, err
+	}
+	err = syscall.Listen(lfd, 1024)
+	if err != nil {
+		log.Error(err)
+		return nil, err
+	}
 
-func (e *epoll) AddListener(fd int) error {
-	err := syscall.EpollCtl(e.fd, syscall.EPOLL_CTL_ADD, fd, &syscall.EpollEvent{
+	fd, err := syscall.EpollCreate1(0)
+	if err != nil {
+		log.Error(err)
+		return nil, err
+	}
+
+	err = syscall.EpollCtl(fd, syscall.EPOLL_CTL_ADD, lfd, &syscall.EpollEvent{
 		Events: EpollListener,
-		Fd:     int32(fd),
+		Fd:     int32(lfd),
 	})
 	if err != nil {
-		return err
+		log.Error(err)
+		return nil, err
 	}
-	e.lfd = int32(fd)
-	return nil
+
+	return &epoll{
+		fd:  fd,
+		lfd: int32(lfd),
+	}, nil
 }
 
 func (e *epoll) AddRead(fd int) error {
