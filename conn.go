@@ -1,7 +1,6 @@
 package gn
 
 import (
-	"sync"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -9,7 +8,6 @@ import (
 
 // Conn 客户端长连接
 type Conn struct {
-	rm           sync.Mutex  // read锁
 	s            *Server     // 服务器引用
 	fd           int32       // 文件描述符
 	addr         string      // 对端地址
@@ -39,11 +37,8 @@ func (c *Conn) GetAddr() string {
 
 // Read 读取数据
 func (c *Conn) Read() error {
-	c.rm.Lock()
-	defer c.rm.Unlock()
-
 	c.lastReadTime = time.Now()
-	err := Decode(c)
+	err := c.s.decoder.Decode(c)
 	if err != nil {
 		return err
 	}
@@ -54,16 +49,6 @@ func (c *Conn) Read() error {
 // Write 写入数据
 func (c *Conn) Write(bytes []byte) (int, error) {
 	return syscall.Write(int(c.fd), bytes)
-}
-
-// GetData 获取数据
-func (c *Conn) GetData() interface{} {
-	return c.data
-}
-
-// SetData 设置数据
-func (c *Conn) SetData(data interface{}) {
-	c.data = data
 }
 
 // Close 关闭连接
@@ -78,4 +63,14 @@ func (c *Conn) Close() error {
 	c.s.conns.Delete(c.fd)
 	atomic.AddInt64(&c.s.connsNum, -1)
 	return nil
+}
+
+// GetData 获取数据
+func (c *Conn) GetData() interface{} {
+	return c.data
+}
+
+// SetData 设置数据
+func (c *Conn) SetData(data interface{}) {
+	c.data = data
 }
