@@ -24,13 +24,15 @@ type Handler interface {
 
 // options Server初始化参数
 type options struct {
-	headerLen     int           // 数据包头部大小,默认值是2
-	readMaxLen    int           // 所读取的客户端包的最大长度，客户端发送的包不能超过这个长度，默认值是1024字节
-	writeLen      int           // 服务器发送给客户端包的建议长度，当发送的包小于这个值时，会利用到内存池优化，默认值是1024字节
-	acceptGNum    int           // 处理接受请求的goroutine数量
-	ioGNum        int           // 处理io的goroutine数量
-	timeoutTicker time.Duration // 超时时间检查间隔
-	timeout       time.Duration // 超时时间
+	headerLen            int           // 数据包头部大小,默认值是2
+	readMaxLen           int           // 所读取的客户端包的最大长度，客户端发送的包不能超过这个长度，默认值是1024字节
+	writeLen             int           // 服务器发送给客户端包的建议长度，当发送的包小于这个值时，会利用到内存池优化，默认值是1024字节
+	acceptGNum           int           // 处理接受请求的goroutine数量
+	ioGNum               int           // 处理io的goroutine数量
+	timeoutTicker        time.Duration // 超时时间检查间隔
+	timeout              time.Duration // 超时时间
+	connectEventQueueLen int           // 连接事件队列长度
+	ioEventQueueLen      int           // io事件队列长度
 }
 
 type Option interface {
@@ -71,6 +73,26 @@ func WithIOGNum(num int) Option {
 	})
 }
 
+// WithConnectEventQueueLen 设置连接事件队列长度，默认值是1024
+func WithConnectEventQueueLen(num int) Option {
+	return newFuncServerOption(func(o *options) {
+		if num <= 0 {
+			panic("connectEventQueueLen must greater than 0")
+		}
+		o.connectEventQueueLen = num
+	})
+}
+
+// WithIOEventQueueLen 设置IO事件队列长度，默认值是1024
+func WithIOEventQueueLen(num int) Option {
+	return newFuncServerOption(func(o *options) {
+		if num <= 0 {
+			panic("ioEventQueueLen must greater than 0")
+		}
+		o.ioEventQueueLen = num
+	})
+}
+
 // WithTimeout 设置TCP超时检查的间隔时间以及超时时间
 func WithTimeout(timeoutTicker, timeout time.Duration) Option {
 	return newFuncServerOption(func(o *options) {
@@ -89,13 +111,15 @@ func WithTimeout(timeoutTicker, timeout time.Duration) Option {
 func getOptions(opts ...Option) *options {
 	cpuNum := runtime.NumCPU()
 	options := &options{
-		headerLen:     2,
-		readMaxLen:    1024,
-		writeLen:      1024,
-		acceptGNum:    cpuNum,
-		ioGNum:        cpuNum,
-		timeoutTicker: 0,
-		timeout:       0,
+		headerLen:            2,
+		readMaxLen:           1024,
+		writeLen:             1024,
+		acceptGNum:           cpuNum,
+		ioGNum:               cpuNum,
+		timeoutTicker:        0,
+		timeout:              0,
+		connectEventQueueLen: 1024,
+		ioEventQueueLen:      1024,
 	}
 
 	for _, o := range opts {
@@ -141,7 +165,7 @@ func NewServer(port int, handler Handler, decoder Decoder, opts ...Option) (*Ser
 
 	ioEventQueues := make([]chan Event, options.ioGNum)
 	for i := range ioEventQueues {
-		ioEventQueues[i] = make(chan Event, 1024)
+		ioEventQueues[i] = make(chan Event, options.ioEventQueueLen)
 	}
 
 	return &Server{
@@ -149,7 +173,7 @@ func NewServer(port int, handler Handler, decoder Decoder, opts ...Option) (*Ser
 		epoll:             epoll,
 		handler:           handler,
 		decoder:           decoder,
-		connectEventQueue: make(chan Event, 1024),
+		connectEventQueue: make(chan Event, options.connectEventQueueLen),
 		ioEventQueues:     ioEventQueues,
 		ioQueueNum:        int32(options.ioGNum),
 		conns:             sync.Map{},
