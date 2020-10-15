@@ -69,7 +69,7 @@ func WithIOGNum(num int) Option {
 		if num <= 0 {
 			panic("IOGNum must greater than 0")
 		}
-		o.acceptGNum = num
+		o.ioGNum = num
 	})
 }
 
