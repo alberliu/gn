@@ -6,6 +6,8 @@ import (
 	"time"
 )
 
+var server *gn.Server
+
 type Handler struct {
 }
 
@@ -23,10 +25,12 @@ func (Handler) OnClose(c *gn.Conn, err error) {
 var encoder = gn.NewHeaderLenEncoder(2, 1024)
 
 func main() {
-	server, err := gn.NewServer(8080, &Handler{}, gn.NewHeaderLenDecoder(2, 1024), gn.WithTimeout(1*time.Second, 5*time.Second))
+	var err error
+	server, err = gn.NewServer(8080, &Handler{}, gn.NewHeaderLenDecoder(2, 1024), gn.WithTimeout(1*time.Second, 5*time.Second))
 	if err != nil {
 		log.Panicln("err")
 		return
 	}
+
 	server.Run()
 }

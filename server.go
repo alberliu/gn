@@ -183,7 +183,7 @@ func NewServer(port int, handler Handler, decoder Decoder, opts ...Option) (*Ser
 }
 
 // GetConn 获取Conn
-func (s *Server) GetConn(fd int) (*Conn, bool) {
+func (s *Server) GetConn(fd int32) (*Conn, bool) {
 	value, ok := s.conns.Load(fd)
 	if !ok {
 		return nil, false
