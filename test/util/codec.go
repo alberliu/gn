@@ -3,6 +3,7 @@ package util
 import (
 	"encoding/binary"
 	"fmt"
+	"github.com/alberliu/gn/buffer"
 	"net"
 )
 
@@ -14,20 +15,20 @@ const (
 // Codec 编解码器，用来处理tcp的拆包粘包
 type Codec struct {
 	Conn    net.Conn
-	ReadBuf buffer // 读缓冲
+	ReadBuf *buffer.Buffer // 读缓冲
 }
 
 // NewCodec 创建一个编解码器
 func NewCodec(conn net.Conn) *Codec {
 	return &Codec{
 		Conn:    conn,
-		ReadBuf: newBuffer(make([]byte, maxLen)),
+		ReadBuf: buffer.NewBuffer(make([]byte, maxLen)),
 	}
 }
 
 // Read 从conn里面读取数据，当conn发生阻塞，这个方法也会阻塞
 func (c *Codec) Read() (int, error) {
-	return c.ReadBuf.readFromReader(c.Conn)
+	return c.ReadBuf.ReadFromReader(c.Conn)
 }
 
 // Decode 解码数据
@@ -36,7 +37,7 @@ func (c *Codec) Read() (int, error) {
 func (c *Codec) Decode() ([]byte, bool, error) {
 	var err error
 	// 读取数据长度
-	lenBuf, err := c.ReadBuf.seek(0, headerLen)
+	lenBuf, err := c.ReadBuf.Seek(headerLen)
 	if err != nil {
 		return nil, false, nil
 	}
@@ -50,7 +51,7 @@ func (c *Codec) Decode() ([]byte, bool, error) {
 		return nil, false, nil
 	}
 
-	valueBuf, err := c.ReadBuf.read(headerLen, valueLen)
+	valueBuf, err := c.ReadBuf.Read(headerLen, valueLen)
 	if err != nil {
 		return nil, false, nil
 	}

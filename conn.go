@@ -1,6 +1,7 @@
 package gn
 
 import (
+	"github.com/alberliu/gn/buffer"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -8,11 +9,12 @@ import (
 
 // Conn 客户端长连接
 type Conn struct {
-	s            *Server     // 服务器引用
-	fd           int32       // 文件描述符
-	addr         string      // 对端地址
-	lastReadTime time.Time   // 最后一次读取数据的时间
-	data         interface{} // 业务自定义数据，用作扩展
+	s            *Server        // 服务器引用
+	fd           int32          // 文件描述符
+	addr         string         // 对端地址
+	buffer       *buffer.Buffer // 读缓存区
+	lastReadTime time.Time      // 最后一次读取数据的时间
+	data         interface{}    // 业务自定义数据，用作扩展
 }
 
 // newConn 创建tcp链接
@@ -21,6 +23,7 @@ func newConn(fd int32, addr string, s *Server) *Conn {
 		s:            s,
 		fd:           fd,
 		addr:         addr,
+		buffer:       buffer.NewBuffer(s.readBufferPool.Get().([]byte)),
 		lastReadTime: time.Now(),
 	}
 }
@@ -38,12 +41,22 @@ func (c *Conn) GetAddr() string {
 // Read 读取数据
 func (c *Conn) Read() error {
 	c.lastReadTime = time.Now()
-	err := c.s.decoder.Decode(c)
-	if err != nil {
-		return err
-	}
+	fd := int(c.GetFd())
+	for {
+		err := c.buffer.ReadFromFD(fd)
+		if err != nil {
+			// 缓存区暂无数据可读
+			if err == syscall.EAGAIN {
+				return nil
+			}
+			return err
+		}
 
-	return nil
+		err = c.s.decoder.Decode(c)
+		if err != nil {
+			return err
+		}
+	}
 }
 
 // Write 写入数据
@@ -61,6 +74,9 @@ func (c *Conn) Close() error {
 
 	// 从conns中删除conn
 	c.s.conns.Delete(c.fd)
+	// 归还缓存区
+	c.s.readBufferPool.Put(c.buffer.Buf)
+	// 连接数减一
 	atomic.AddInt64(&c.s.connsNum, -1)
 	return nil
 }

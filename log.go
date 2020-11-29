@@ -13,6 +13,10 @@ func SetLogger(l logger) {
 	log = l
 }
 
+func GetLogger() logger {
+	return log
+}
+
 type logger interface {
 	Error(args ...interface{})
 	Info(args ...interface{})

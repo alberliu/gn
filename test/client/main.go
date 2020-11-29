@@ -12,6 +12,14 @@ func init() {
 }
 
 func main() {
+	//for i := 0; i < 10; i++ {
+	go start()
+	//}
+	select {}
+}
+
+func start() {
+	log.Println("start")
 	conn, err := net.Dial("tcp", "127.0.0.1:8085")
 	if err != nil {
 		log.Println("Error dialing", err.Error())
@@ -44,12 +52,11 @@ func main() {
 	}()
 
 	for i := 0; i < 10; i++ {
-		n, err := conn.Write(util.Encode([]byte("hello" + strconv.Itoa(i))))
+		_, err := conn.Write(util.Encode([]byte("hello" + strconv.Itoa(i))))
 		if err != nil {
 			log.Println(err)
 			return
 		}
-		log.Println("write:", n)
+		//log.Println("write:", n)
 	}
-	select {}
 }

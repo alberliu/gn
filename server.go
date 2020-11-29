@@ -3,6 +3,7 @@ package gn
 import (
 	"errors"
 	"fmt"
+	"io"
 	"runtime"
 	"strconv"
 	"sync"
@@ -24,15 +25,12 @@ type Handler interface {
 
 // options Server初始化参数
 type options struct {
-	headerLen            int           // 数据包头部大小,默认值是2
-	readMaxLen           int           // 所读取的客户端包的最大长度，客户端发送的包不能超过这个长度，默认值是1024字节
-	writeLen             int           // 服务器发送给客户端包的建议长度，当发送的包小于这个值时，会利用到内存池优化，默认值是1024字节
-	acceptGNum           int           // 处理接受请求的goroutine数量
-	ioGNum               int           // 处理io的goroutine数量
-	timeoutTicker        time.Duration // 超时时间检查间隔
-	timeout              time.Duration // 超时时间
-	connectEventQueueLen int           // 连接事件队列长度
-	ioEventQueueLen      int           // io事件队列长度
+	readBufferLen   int           // 所读取的客户端包的最大长度，客户端发送的包不能超过这个长度，默认值是1024字节
+	acceptGNum      int           // 处理接受请求的goroutine数量
+	ioGNum          int           // 处理io的goroutine数量
+	ioEventQueueLen int           // io事件队列长度
+	timeoutTicker   time.Duration // 超时时间检查间隔
+	timeout         time.Duration // 超时时间
 }
 
 type Option interface {
@@ -53,6 +51,16 @@ func newFuncServerOption(f func(*options)) *funcServerOption {
 	}
 }
 
+// WithReadBufferLen 设置缓存区大小
+func WithReadBufferLen(len int) Option {
+	return newFuncServerOption(func(o *options) {
+		if len <= 0 {
+			panic("acceptGNum must greater than 0")
+		}
+		o.readBufferLen = len
+	})
+}
+
 // WithAcceptGNum 设置建立连接的goroutine数量
 func WithAcceptGNum(num int) Option {
 	return newFuncServerOption(func(o *options) {
@@ -70,16 +78,6 @@ func WithIOGNum(num int) Option {
 			panic("IOGNum must greater than 0")
 		}
 		o.ioGNum = num
-	})
-}
-
-// WithConnectEventQueueLen 设置连接事件队列长度，默认值是1024
-func WithConnectEventQueueLen(num int) Option {
-	return newFuncServerOption(func(o *options) {
-		if num <= 0 {
-			panic("connectEventQueueLen must greater than 0")
-		}
-		o.connectEventQueueLen = num
 	})
 }
 
@@ -111,15 +109,10 @@ func WithTimeout(timeoutTicker, timeout time.Duration) Option {
 func getOptions(opts ...Option) *options {
 	cpuNum := runtime.NumCPU()
 	options := &options{
-		headerLen:            2,
-		readMaxLen:           1024,
-		writeLen:             1024,
-		acceptGNum:           cpuNum,
-		ioGNum:               cpuNum,
-		timeoutTicker:        0,
-		timeout:              0,
-		connectEventQueueLen: 1024,
-		ioEventQueueLen:      1024,
+		readBufferLen:   1024,
+		acceptGNum:      cpuNum,
+		ioGNum:          cpuNum,
+		ioEventQueueLen: 1024,
 	}
 
 	for _, o := range opts {
@@ -129,9 +122,9 @@ func getOptions(opts ...Option) *options {
 }
 
 const (
-	EventConn  = 1 // 请求建立连接
-	EventIn    = 2 // 数据流入
-	EventClose = 3 // 断开连接
+	EventIn      = 1 // 数据流入
+	EventClose   = 2 // 断开连接
+	EventTimeout = 3 // 检测到超时
 )
 
 type Event struct {
@@ -141,21 +134,28 @@ type Event struct {
 
 // server TCP服务
 type Server struct {
-	options           *options     // 服务参数
-	epoll             *epoll       // 系统相关网络模型
-	handler           Handler      // 注册的处理
-	decoder           Decoder      // 解码器
-	connectEventQueue chan Event   // connect事件队列
-	ioEventQueues     []chan Event // IO事件队列集合
-	ioQueueNum        int32        // IO事件队列集合数量
-	conns             sync.Map     // TCP长连接管理
-	connsNum          int64        // 当前建立的长连接数量
-	stop              chan int     // 服务器关闭信号
+	options        *options     // 服务参数
+	epoll          *epoll       // 系统相关网络模型
+	readBufferPool *sync.Pool   // 读缓存区内存池
+	handler        Handler      // 注册的处理
+	decoder        Decoder      // 解码器
+	ioEventQueues  []chan Event // IO事件队列集合
+	ioQueueNum     int32        // IO事件队列集合数量
+	conns          sync.Map     // TCP长连接管理
+	connsNum       int64        // 当前建立的长连接数量
+	stop           chan int     // 服务器关闭信号
 }
 
 // NewServer 创建server服务器
 func NewServer(port int, handler Handler, decoder Decoder, opts ...Option) (*Server, error) {
 	options := getOptions(opts...)
+
+	readBufferPool := &sync.Pool{
+		New: func() interface{} {
+			b := make([]byte, options.readBufferLen)
+			return b
+		},
+	}
 
 	epoll, err := EpollCreate(port)
 	if err != nil {
@@ -169,16 +169,16 @@ func NewServer(port int, handler Handler, decoder Decoder, opts ...Option) (*Ser
 	}
 
 	return &Server{
-		options:           options,
-		epoll:             epoll,
-		handler:           handler,
-		decoder:           decoder,
-		connectEventQueue: make(chan Event, options.connectEventQueueLen),
-		ioEventQueues:     ioEventQueues,
-		ioQueueNum:        int32(options.ioGNum),
-		conns:             sync.Map{},
-		connsNum:          0,
-		stop:              make(chan int),
+		options:        options,
+		epoll:          epoll,
+		readBufferPool: readBufferPool,
+		handler:        handler,
+		decoder:        decoder,
+		ioEventQueues:  ioEventQueues,
+		ioQueueNum:     int32(options.ioGNum),
+		conns:          sync.Map{},
+		connsNum:       0,
+		stop:           make(chan int),
 	}, nil
 }
 
@@ -194,9 +194,10 @@ func (s *Server) GetConn(fd int32) (*Conn, bool) {
 // Run 启动服务
 func (s *Server) Run() {
 	log.Info("ge server run")
+	s.startAccept()
 	s.startConsumer()
 	s.checkTimeout()
-	s.startProducer()
+	s.startIOProducer()
 }
 
 // GetConnsNum 获取当前长连接的数量
@@ -207,32 +208,26 @@ func (s *Server) GetConnsNum() int64 {
 // Run 启动服务
 func (s *Server) Stop() {
 	close(s.stop)
-	close(s.connectEventQueue)
 	for _, queue := range s.ioEventQueues {
 		close(queue)
 	}
 }
 
-// HandleEvent
-func (s *Server) HandleEvent(event Event) {
-	if event.Type == EventConn {
-		s.connectEventQueue <- event
-		return
-	}
-
+// handleEvent 处理事件
+func (s *Server) handleEvent(event Event) {
 	index := event.Fd % s.ioQueueNum
 	s.ioEventQueues[index] <- event
 }
 
 // StartProducer 启动生产者
-func (s *Server) startProducer() {
+func (s *Server) startIOProducer() {
 	for {
 		select {
 		case <-s.stop:
 			log.Error("stop producer")
 			return
 		default:
-			err := s.epoll.EpollWait(s.HandleEvent)
+			err := s.epoll.EpollWait(s.handleEvent)
 			if err != nil {
 				log.Error(err)
 			}
@@ -240,40 +235,51 @@ func (s *Server) startProducer() {
 	}
 }
 
+// startAccept 开始接收连接请求
+func (s *Server) startAccept() {
+	for i := 0; i < s.options.acceptGNum; i++ {
+		go s.accept()
+	}
+	log.Info("start accept by " + strconv.Itoa(s.options.acceptGNum) + " goroutine")
+}
+
+// accept 接收连接请求
+func (s *Server) accept() {
+	for {
+		select {
+		case <-s.stop:
+			return
+		default:
+			nfd, sa, err := syscall.Accept(int(s.epoll.lfd))
+			if err != nil {
+				log.Error(err)
+				continue
+			}
+
+			// 设置为非阻塞状态
+			syscall.SetNonblock(nfd, true)
+
+			fd := int32(nfd)
+			conn := newConn(fd, getIPPort(sa), s)
+			s.conns.Store(fd, conn)
+			atomic.AddInt64(&s.connsNum, 1)
+			s.handler.OnConnect(conn)
+
+			err = s.epoll.AddRead(nfd)
+			if err != nil {
+				log.Error(err)
+				continue
+			}
+		}
+	}
+}
+
 // StartConsumer 启动消费者
 func (s *Server) startConsumer() {
-	for i := 0; i < s.options.acceptGNum; i++ {
-		go s.consumeConnectEvent()
-	}
-	log.Info("consume connect event run by " + strconv.Itoa(s.options.acceptGNum) + " goroutine")
-
 	for _, queue := range s.ioEventQueues {
 		go s.consumeIOEvent(queue)
 	}
 	log.Info("consume io event run by " + strconv.Itoa(s.options.ioGNum) + " goroutine")
-}
-
-// consumeAcceptEvent 消费连接事件
-func (s *Server) consumeConnectEvent() {
-	for event := range s.connectEventQueue {
-		nfd, sa, err := syscall.Accept(int(event.Fd))
-		if err != nil {
-			log.Error(err)
-			continue
-		}
-
-		fd := int32(nfd)
-		conn := newConn(fd, getIPPort(sa), s)
-		s.conns.Store(fd, conn)
-		atomic.AddInt64(&s.connsNum, 1)
-		s.handler.OnConnect(conn)
-
-		err = s.epoll.AddRead(nfd)
-		if err != nil {
-			log.Error(err)
-			continue
-		}
-	}
 }
 
 // ConsumeIO 消费IO事件
@@ -287,6 +293,11 @@ func (s *Server) consumeIOEvent(queue chan Event) {
 		c := v.(*Conn)
 
 		if event.Type == EventClose {
+			c.Close()
+			s.handler.OnClose(c, io.EOF)
+			continue
+		}
+		if event.Type == EventTimeout {
 			c.Close()
 			s.handler.OnClose(c, ErrReadTimeout)
 			continue
@@ -328,7 +339,7 @@ func (s *Server) checkTimeout() {
 					c := value.(*Conn)
 
 					if time.Now().Sub(c.lastReadTime) > s.options.timeout {
-						s.HandleEvent(Event{Fd: c.fd, Type: EventClose})
+						s.handleEvent(Event{Fd: c.fd, Type: EventTimeout})
 					}
 					return true
 				})
