@@ -39,17 +39,16 @@ func (d *headerLenDecoder) Decode(c *Conn) error {
 	for {
 		header, err := c.buffer.Seek(d.headerLen)
 		if err == buffer.ErrNotEnough {
-			break
+			return nil
 		}
 		valueLen := int(binary.BigEndian.Uint16(header))
 		value, err := c.buffer.Read(d.headerLen, valueLen)
 		if err == buffer.ErrNotEnough {
-			break
+			return nil
 		}
 
 		c.s.handler.OnMessage(c, value)
 	}
-	return nil
 }
 
 type headerLenEncoder struct {

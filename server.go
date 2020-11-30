@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"runtime"
-	"strconv"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -150,6 +149,7 @@ type Server struct {
 func NewServer(port int, handler Handler, decoder Decoder, opts ...Option) (*Server, error) {
 	options := getOptions(opts...)
 
+	// 初始化读缓存区内存池
 	readBufferPool := &sync.Pool{
 		New: func() interface{} {
 			b := make([]byte, options.readBufferLen)
@@ -157,12 +157,14 @@ func NewServer(port int, handler Handler, decoder Decoder, opts ...Option) (*Ser
 		},
 	}
 
+	// 初始化epoll网络
 	epoll, err := EpollCreate(port)
 	if err != nil {
 		log.Error(err)
 		return nil, err
 	}
 
+	// 初始化io事件队列
 	ioEventQueues := make([]chan Event, options.ioGNum)
 	for i := range ioEventQueues {
 		ioEventQueues[i] = make(chan Event, options.ioEventQueueLen)
@@ -193,9 +195,9 @@ func (s *Server) GetConn(fd int32) (*Conn, bool) {
 
 // Run 启动服务
 func (s *Server) Run() {
-	log.Info("ge server run")
+	log.Info("gn server run")
 	s.startAccept()
-	s.startConsumer()
+	s.startIOConsumer()
 	s.checkTimeout()
 	s.startIOProducer()
 }
@@ -221,6 +223,7 @@ func (s *Server) handleEvent(event Event) {
 
 // StartProducer 启动生产者
 func (s *Server) startIOProducer() {
+	log.Info("start io producer")
 	for {
 		select {
 		case <-s.stop:
@@ -240,7 +243,7 @@ func (s *Server) startAccept() {
 	for i := 0; i < s.options.acceptGNum; i++ {
 		go s.accept()
 	}
-	log.Info("start accept by " + strconv.Itoa(s.options.acceptGNum) + " goroutine")
+	log.Info(fmt.Sprintf("start accept by %d goroutine", s.options.acceptGNum))
 }
 
 // accept 接收连接请求
@@ -275,11 +278,11 @@ func (s *Server) accept() {
 }
 
 // StartConsumer 启动消费者
-func (s *Server) startConsumer() {
+func (s *Server) startIOConsumer() {
 	for _, queue := range s.ioEventQueues {
 		go s.consumeIOEvent(queue)
 	}
-	log.Info("consume io event run by " + strconv.Itoa(s.options.ioGNum) + " goroutine")
+	log.Info(fmt.Sprintf("start io event consumer by %d goroutine", len(s.ioEventQueues)))
 }
 
 // ConsumeIO 消费IO事件
@@ -327,7 +330,7 @@ func (s *Server) checkTimeout() {
 	if s.options.timeout == 0 || s.options.timeoutTicker == 0 {
 		return
 	}
-	log.Info("check timeout goroutine run")
+	log.Info(fmt.Sprintf("check timeout goroutine run,check_time:%v,timeout:%v", s.options.timeoutTicker, s.options.timeout))
 	go func() {
 		ticker := time.NewTicker(s.options.timeoutTicker)
 		for {
