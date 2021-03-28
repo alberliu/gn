@@ -3,6 +3,7 @@ package gn
 import (
 	"encoding/binary"
 	"github.com/alberliu/gn/buffer"
+	"io"
 	"sync"
 	"syscall"
 )
@@ -96,5 +97,26 @@ func (e headerLenEncoder) EncodeToFD(fd int32, bytes []byte) error {
 	copy(buffer[e.headerLen:], bytes)
 
 	_, err := syscall.Write(int(fd), buffer)
+	return err
+}
+
+// EncodeToWriter 编码数据,并且写入Writer
+func (e headerLenEncoder) EncodeToWriter(w io.Writer, bytes []byte) error {
+	l := len(bytes)
+	var buffer []byte
+	if l <= e.writeBufferLen-e.headerLen {
+		obj := e.writeBufferPool.Get()
+		defer e.writeBufferPool.Put(obj)
+		buffer = obj.([]byte)[0 : l+e.headerLen]
+	} else {
+		buffer = make([]byte, l+e.headerLen)
+	}
+
+	// 将消息长度写入buffer
+	binary.BigEndian.PutUint16(buffer[0:2], uint16(l))
+	// 将消息内容内容写入buffer
+	copy(buffer[e.headerLen:], bytes)
+
+	_, err := w.Write(buffer)
 	return err
 }
