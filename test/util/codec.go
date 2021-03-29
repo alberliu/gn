@@ -2,14 +2,15 @@ package util
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"github.com/alberliu/gn/buffer"
 	"net"
 )
 
-const (
-	headerLen = 2
-	maxLen    = 1024
+var (
+	HeaderLen = 2
+	MaxLen    = 1024
 )
 
 // Codec 编解码器，用来处理tcp的拆包粘包
@@ -22,7 +23,7 @@ type Codec struct {
 func NewCodec(conn net.Conn) *Codec {
 	return &Codec{
 		Conn:    conn,
-		ReadBuf: buffer.NewBuffer(make([]byte, maxLen)),
+		ReadBuf: buffer.NewBuffer(make([]byte, MaxLen)),
 	}
 }
 
@@ -37,7 +38,7 @@ func (c *Codec) Read() (int, error) {
 func (c *Codec) Decode() ([]byte, bool, error) {
 	var err error
 	// 读取数据长度
-	lenBuf, err := c.ReadBuf.Seek(headerLen)
+	lenBuf, err := c.ReadBuf.Seek(HeaderLen)
 	if err != nil {
 		return nil, false, nil
 	}
@@ -46,12 +47,12 @@ func (c *Codec) Decode() ([]byte, bool, error) {
 	valueLen := int(binary.BigEndian.Uint16(lenBuf))
 
 	// 数据的字节数组长度大于buffer的长度，返回错误
-	if valueLen > maxLen {
+	if valueLen > MaxLen {
 		fmt.Println("out of max len")
-		return nil, false, nil
+		return nil, false, errors.New("out of max len")
 	}
 
-	valueBuf, err := c.ReadBuf.Read(headerLen, valueLen)
+	valueBuf, err := c.ReadBuf.Read(HeaderLen, valueLen)
 	if err != nil {
 		return nil, false, nil
 	}
