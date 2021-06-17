@@ -207,7 +207,7 @@ func (s *Server) GetConnsNum() int64 {
 	return atomic.LoadInt64(&s.connsNum)
 }
 
-// Run 启动服务
+// Stop 启动服务
 func (s *Server) Stop() {
 	close(s.stop)
 	for _, queue := range s.ioEventQueues {
