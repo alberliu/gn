@@ -48,7 +48,7 @@ func (d *headerLenDecoder) Decode(c *Conn) error {
 			return nil
 		}
 
-		c.s.handler.OnMessage(c, value)
+		c.server.handler.OnMessage(c, value)
 	}
 }
 

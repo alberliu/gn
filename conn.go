@@ -9,7 +9,7 @@ import (
 
 // Conn 客户端长连接
 type Conn struct {
-	s            *Server        // 服务器引用
+	server       *Server        // 服务器引用
 	fd           int32          // 文件描述符
 	addr         string         // 对端地址
 	buffer       *buffer.Buffer // 读缓存区
@@ -18,12 +18,12 @@ type Conn struct {
 }
 
 // newConn 创建tcp链接
-func newConn(fd int32, addr string, s *Server) *Conn {
+func newConn(fd int32, addr string, server *Server) *Conn {
 	return &Conn{
-		s:            s,
+		server:       server,
 		fd:           fd,
 		addr:         addr,
-		buffer:       buffer.NewBuffer(s.readBufferPool.Get().([]byte)),
+		buffer:       buffer.NewBuffer(server.readBufferPool.Get().([]byte)),
 		lastReadTime: time.Now(),
 	}
 }
@@ -52,7 +52,7 @@ func (c *Conn) Read() error {
 			return err
 		}
 
-		err = c.s.decoder.Decode(c)
+		err = c.server.decoder.Decode(c)
 		if err != nil {
 			return err
 		}
@@ -67,17 +67,17 @@ func (c *Conn) Write(bytes []byte) (int, error) {
 // Close 关闭连接
 func (c *Conn) Close() error {
 	// 从epoll监听的文件描述符中删除
-	err := c.s.epoll.RemoveAndClose(int(c.fd))
+	err := close(int(c.fd))
 	if err != nil {
 		log.Error(err)
 	}
 
 	// 从conns中删除conn
-	c.s.conns.Delete(c.fd)
+	c.server.conns.Delete(c.fd)
 	// 归还缓存区
-	c.s.readBufferPool.Put(c.buffer.Buf)
+	c.server.readBufferPool.Put(c.buffer.Buf)
 	// 连接数减一
-	atomic.AddInt64(&c.s.connsNum, -1)
+	atomic.AddInt64(&c.server.connsNum, -1)
 	return nil
 }
 
