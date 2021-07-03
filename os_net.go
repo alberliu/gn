@@ -10,9 +10,10 @@ func accept() (nfd int, addr string, err error) {
 	panic("please run in linux")
 }
 
-func close(fd int) error {
+func closeFD(fd int) error {
 	panic("please run in linux")
 }
 
 func getEvents() ([]event, error) {
+	panic("please run in linux")
 }

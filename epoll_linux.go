@@ -79,7 +79,7 @@ func addRead(fd int) error {
 	return nil
 }
 
-func close(fd int) error {
+func closeFD(fd int) error {
 	// 移除文件描述符的监听
 	err := syscall.EpollCtl(epollFD, syscall.EPOLL_CTL_DEL, fd, nil)
 	if err != nil {
@@ -105,7 +105,7 @@ func getEvents() ([]event, error) {
 	events := make([]event, 0, len(epollEvents))
 	for i := 0; i < n; i++ {
 		event := event{
-			FD: events[i].FD,
+			FD: epollEvents[i].Fd,
 		}
 		if epollEvents[i].Events == EpollClose {
 			event.Type = EventClose
