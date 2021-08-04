@@ -1,4 +1,4 @@
-package buffer
+package gn
 
 import (
 	"errors"
@@ -8,7 +8,7 @@ import (
 
 var ErrNotEnough = errors.New("not enough")
 
-// buffer 读缓冲区,每个tcp长连接对应一个读缓冲区
+// Buffer 读缓冲区,每个tcp长连接对应一个读缓冲区
 type Buffer struct {
 	Buf   []byte // 应用内缓存区
 	start int    // 有效字节开始位置

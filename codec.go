@@ -2,7 +2,6 @@ package gn
 
 import (
 	"encoding/binary"
-	"github.com/alberliu/gn/buffer"
 	"io"
 	"sync"
 	"syscall"
@@ -39,16 +38,16 @@ func NewHeaderLenDecoder(headerLen int) Decoder {
 func (d *headerLenDecoder) Decode(c *Conn) error {
 	for {
 		header, err := c.buffer.Seek(d.headerLen)
-		if err == buffer.ErrNotEnough {
+		if err == ErrNotEnough {
 			return nil
 		}
 		valueLen := int(binary.BigEndian.Uint16(header))
 		value, err := c.buffer.Read(d.headerLen, valueLen)
-		if err == buffer.ErrNotEnough {
+		if err == ErrNotEnough {
 			return nil
 		}
 
-		c.s.handler.OnMessage(c, value)
+		c.server.handler.OnMessage(c, value)
 	}
 }
 

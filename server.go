@@ -126,19 +126,18 @@ const (
 	EventTimeout = 3 // 检测到超时
 )
 
-type Event struct {
-	Fd   int32 // 文件描述符
+type event struct {
+	FD   int32 // 文件描述符
 	Type int32 // 时间类型
 }
 
-// server TCP服务
+// Server TCP服务
 type Server struct {
 	options        *options     // 服务参数
-	epoll          *epoll       // 系统相关网络模型
 	readBufferPool *sync.Pool   // 读缓存区内存池
 	handler        Handler      // 注册的处理
 	decoder        Decoder      // 解码器
-	ioEventQueues  []chan Event // IO事件队列集合
+	ioEventQueues  []chan event // IO事件队列集合
 	ioQueueNum     int32        // IO事件队列集合数量
 	conns          sync.Map     // TCP长连接管理
 	connsNum       int64        // 当前建立的长连接数量
@@ -146,7 +145,7 @@ type Server struct {
 }
 
 // NewServer 创建server服务器
-func NewServer(port int, handler Handler, decoder Decoder, opts ...Option) (*Server, error) {
+func NewServer(address string, handler Handler, decoder Decoder, opts ...Option) (*Server, error) {
 	options := getOptions(opts...)
 
 	// 初始化读缓存区内存池
@@ -158,21 +157,20 @@ func NewServer(port int, handler Handler, decoder Decoder, opts ...Option) (*Ser
 	}
 
 	// 初始化epoll网络
-	epoll, err := EpollCreate(port)
+	err := listen(address)
 	if err != nil {
 		log.Error(err)
 		return nil, err
 	}
 
 	// 初始化io事件队列
-	ioEventQueues := make([]chan Event, options.ioGNum)
+	ioEventQueues := make([]chan event, options.ioGNum)
 	for i := range ioEventQueues {
-		ioEventQueues[i] = make(chan Event, options.ioEventQueueLen)
+		ioEventQueues[i] = make(chan event, options.ioEventQueueLen)
 	}
 
 	return &Server{
 		options:        options,
-		epoll:          epoll,
 		readBufferPool: readBufferPool,
 		handler:        handler,
 		decoder:        decoder,
@@ -216,8 +214,8 @@ func (s *Server) Stop() {
 }
 
 // handleEvent 处理事件
-func (s *Server) handleEvent(event Event) {
-	index := event.Fd % s.ioQueueNum
+func (s *Server) handleEvent(event event) {
+	index := event.FD % s.ioQueueNum
 	s.ioEventQueues[index] <- event
 }
 
@@ -230,9 +228,12 @@ func (s *Server) startIOProducer() {
 			log.Error("stop producer")
 			return
 		default:
-			err := s.epoll.EpollWait(s.handleEvent)
+			events, err := getEvents()
 			if err != nil {
 				log.Error(err)
+			}
+			for i := range events {
+				s.handleEvent(events[i])
 			}
 		}
 	}
@@ -253,26 +254,17 @@ func (s *Server) accept() {
 		case <-s.stop:
 			return
 		default:
-			nfd, sa, err := syscall.Accept(int(s.epoll.lfd))
+			nfd, addr, err := accept()
 			if err != nil {
 				log.Error(err)
 				continue
 			}
 
-			// 设置为非阻塞状态
-			syscall.SetNonblock(nfd, true)
-
 			fd := int32(nfd)
-			conn := newConn(fd, getIPPort(sa), s)
+			conn := newConn(fd, addr, s)
 			s.conns.Store(fd, conn)
 			atomic.AddInt64(&s.connsNum, 1)
 			s.handler.OnConnect(conn)
-
-			err = s.epoll.AddRead(nfd)
-			if err != nil {
-				log.Error(err)
-				continue
-			}
 		}
 	}
 }
@@ -286,11 +278,11 @@ func (s *Server) startIOConsumer() {
 }
 
 // ConsumeIO 消费IO事件
-func (s *Server) consumeIOEvent(queue chan Event) {
+func (s *Server) consumeIOEvent(queue chan event) {
 	for event := range queue {
-		v, ok := s.conns.Load(event.Fd)
+		v, ok := s.conns.Load(event.FD)
 		if !ok {
-			log.Error("not found in conns,", event.Fd)
+			log.Error("not found in conns,", event.FD)
 			continue
 		}
 		c := v.(*Conn)
@@ -320,11 +312,6 @@ func (s *Server) consumeIOEvent(queue chan Event) {
 	}
 }
 
-func getIPPort(sa syscall.Sockaddr) string {
-	addr := sa.(*syscall.SockaddrInet4)
-	return fmt.Sprintf("%d.%d.%d.%d:%d", addr.Addr[0], addr.Addr[1], addr.Addr[2], addr.Addr[3], addr.Port)
-}
-
 // checkTimeout 定时检查超时的TCP长连接
 func (s *Server) checkTimeout() {
 	if s.options.timeout == 0 || s.options.timeoutTicker == 0 {
@@ -342,7 +329,7 @@ func (s *Server) checkTimeout() {
 					c := value.(*Conn)
 
 					if time.Now().Sub(c.lastReadTime) > s.options.timeout {
-						s.handleEvent(Event{Fd: c.fd, Type: EventTimeout})
+						s.handleEvent(event{FD: c.fd, Type: EventTimeout})
 					}
 					return true
 				})

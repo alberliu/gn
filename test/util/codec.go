@@ -4,7 +4,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"github.com/alberliu/gn/buffer"
+	"github.com/alberliu/gn"
 	"net"
 )
 
@@ -16,14 +16,14 @@ var (
 // Codec 编解码器，用来处理tcp的拆包粘包
 type Codec struct {
 	Conn    net.Conn
-	ReadBuf *buffer.Buffer // 读缓冲
+	ReadBuf *gn.Buffer // 读缓冲
 }
 
 // NewCodec 创建一个编解码器
 func NewCodec(conn net.Conn) *Codec {
 	return &Codec{
 		Conn:    conn,
-		ReadBuf: buffer.NewBuffer(make([]byte, MaxLen)),
+		ReadBuf: gn.NewBuffer(make([]byte, MaxLen)),
 	}
 }
 

@@ -12,9 +12,7 @@ func init() {
 }
 
 func main() {
-	//for i := 0; i < 10; i++ {
 	go start()
-	//}
 	select {}
 }
 
@@ -51,7 +49,7 @@ func start() {
 		}
 	}()
 
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 1000; i++ {
 		_, err := conn.Write(util.Encode([]byte("hello" + strconv.Itoa(i))))
 		if err != nil {
 			log.Println(err)
