@@ -1,11 +1,13 @@
 package main
 
 import (
-	"github.com/alberliu/gn/test/util"
+	"github.com/alberliu/gn/util"
 	"log"
 	"net"
 	"strconv"
 )
+
+var codecFactory = util.NewHeaderLenCodecFactory(2, 1024)
 
 func init() {
 	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
@@ -24,28 +26,16 @@ func start() {
 		return // 终止程序
 	}
 
-	codec := util.NewCodec(conn)
+	codec := codecFactory.NewCodec(conn)
 
 	go func() {
 		for {
-			_, err = codec.Read()
+			bytes, err := codec.Read()
 			if err != nil {
 				log.Println(err)
 				return
 			}
-			for {
-				bytes, ok, err := codec.Decode()
-				// 解码出错，需要中断连接
-				if err != nil {
-					log.Println(err)
-					return
-				}
-				if ok {
-					log.Println(string(bytes))
-					continue
-				}
-				break
-			}
+			log.Println(string(bytes))
 		}
 	}()
 

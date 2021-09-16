@@ -1,14 +1,14 @@
 package main
 
 import (
-	"github.com/alberliu/gn/test/util"
+	"github.com/alberliu/gn/util"
 	"log"
 	"net"
 	"strconv"
 	"time"
 )
 
-// 20000 *5 / 300
+var codecFactory = util.NewHeaderLenCodecFactory(2, 1024)
 
 func main() {
 	var conns []net.Conn
@@ -41,7 +41,7 @@ func main() {
 }
 
 func handleConn(conn net.Conn) {
-	codec := util.NewCodec(conn)
+	codec := codecFactory.NewCodec(conn)
 	for {
 		_, err := codec.Read()
 		if err != nil {
@@ -49,16 +49,12 @@ func handleConn(conn net.Conn) {
 			return
 		}
 		for {
-			_, ok, err := codec.Decode()
+			bytes, err := codec.Read()
 			if err != nil {
-				log.Println("error", err)
+				log.Println(err)
 				return
 			}
-			if ok {
-				//log.Println(string(bytes))
-				continue
-			}
-			break
+			log.Println(string(bytes))
 		}
 	}
 }
