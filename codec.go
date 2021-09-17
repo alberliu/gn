@@ -36,13 +36,14 @@ func NewHeaderLenDecoder(headerLen int) Decoder {
 
 // Decode 解码
 func (d *headerLenDecoder) Decode(c *Conn) error {
+	buffer := c.GetBuffer()
 	for {
-		header, err := c.buffer.Seek(d.headerLen)
+		header, err := buffer.Seek(d.headerLen)
 		if err == ErrNotEnough {
 			return nil
 		}
 		valueLen := int(binary.BigEndian.Uint16(header))
-		value, err := c.buffer.Read(d.headerLen, valueLen)
+		value, err := buffer.Read(d.headerLen, valueLen)
 		if err == ErrNotEnough {
 			return nil
 		}

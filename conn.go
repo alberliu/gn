@@ -37,6 +37,11 @@ func (c *Conn) GetAddr() string {
 	return c.addr
 }
 
+// GetBuffer 获取客户端地址
+func (c *Conn) GetBuffer() *Buffer {
+	return c.buffer
+}
+
 // Read 读取数据
 func (c *Conn) Read() error {
 	c.lastReadTime = time.Now()
@@ -74,7 +79,7 @@ func (c *Conn) Close() error {
 	// 从conns中删除conn
 	c.server.conns.Delete(c.fd)
 	// 归还缓存区
-	c.server.readBufferPool.Put(c.buffer.Buf)
+	c.server.readBufferPool.Put(c.buffer.GetBuf())
 	// 连接数减一
 	atomic.AddInt64(&c.server.connsNum, -1)
 	return nil
