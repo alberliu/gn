@@ -20,8 +20,14 @@ func NewBuffer(bytes []byte) *Buffer {
 	return &Buffer{buf: bytes, start: 0, end: 0}
 }
 
+// Len 返回有效字节数组长度
 func (b *Buffer) Len() int {
 	return b.end - b.start
+}
+
+// Cap 返回总容量
+func (b *Buffer) Cap() int {
+	return len(b.buf)
 }
 
 func (b *Buffer) GetBuf() []byte {

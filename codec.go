@@ -2,6 +2,8 @@ package gn
 
 import (
 	"encoding/binary"
+	"errors"
+	"fmt"
 	"io"
 	"sync"
 	"syscall"
@@ -42,13 +44,18 @@ func (d *headerLenDecoder) Decode(c *Conn) error {
 		if err == ErrNotEnough {
 			return nil
 		}
-		valueLen := int(binary.BigEndian.Uint16(header))
-		value, err := buffer.Read(d.headerLen, valueLen)
+		bodyLen := int(binary.BigEndian.Uint16(header))
+		// 检查valueLen合法性
+		if bodyLen > buffer.Cap()-d.headerLen {
+			return errors.New(fmt.Sprintf("illegal body length %d", bodyLen))
+		}
+
+		body, err := buffer.Read(d.headerLen, bodyLen)
 		if err == ErrNotEnough {
 			return nil
 		}
 
-		c.server.handler.OnMessage(c, value)
+		c.server.handler.OnMessage(c, body)
 	}
 }
 
