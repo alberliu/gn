@@ -71,7 +71,7 @@ func (c *Conn) Write(bytes []byte) (int, error) {
 // Close 关闭连接
 func (c *Conn) Close() error {
 	// 从epoll监听的文件描述符中删除
-	err := closeFD(int(c.fd))
+	err := c.server.netpoll.closeFD(int(c.fd))
 	if err != nil {
 		log.Error(err)
 	}
@@ -87,7 +87,7 @@ func (c *Conn) Close() error {
 
 // CloseRead 关闭连接
 func (c *Conn) CloseRead() error {
-	err := closeFDRead(int(c.fd))
+	err := c.server.netpoll.closeFDRead(int(c.fd))
 	if err != nil {
 		log.Error(err)
 	}

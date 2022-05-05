@@ -12,27 +12,26 @@ const (
 	EpollClose = uint32(syscall.EPOLLIN | syscall.EPOLLRDHUP)
 )
 
-var (
+type epoll struct {
 	listenFD int
 	epollFD  int
-)
+}
 
-func listen(address string) error {
-	var err error
-	listenFD, err = syscall.Socket(syscall.AF_INET, syscall.SOCK_STREAM, 0)
+func newNetpoll(address string) (netpoll, error) {
+	listenFD, err := syscall.Socket(syscall.AF_INET, syscall.SOCK_STREAM, 0)
 	if err != nil {
 		log.Error(err)
-		return err
+		return nil, err
 	}
 	err = syscall.SetsockoptInt(listenFD, syscall.SOL_SOCKET, syscall.SO_REUSEADDR, 1)
 	if err != nil {
 		log.Error(err)
-		return err
+		return nil, err
 	}
 
 	addr, port, err := getIPPort(address)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	err = syscall.Bind(listenFD, &syscall.SockaddrInet4{
 		Port: port,
@@ -40,24 +39,24 @@ func listen(address string) error {
 	})
 	if err != nil {
 		log.Error(err)
-		return err
+		return nil, err
 	}
 	err = syscall.Listen(listenFD, 1024)
 	if err != nil {
 		log.Error(err)
-		return err
+		return nil, err
 	}
 
-	epollFD, err = syscall.EpollCreate1(0)
+	epollFD, err := syscall.EpollCreate1(0)
 	if err != nil {
 		log.Error(err)
-		return err
+		return nil, err
 	}
-	return nil
+	return &epoll{listenFD: listenFD, epollFD: epollFD}, nil
 }
 
-func accept() (nfd int, addr string, err error) {
-	nfd, sa, err := syscall.Accept(int(listenFD))
+func (n *epoll) accept() (nfd int, addr string, err error) {
+	nfd, sa, err := syscall.Accept(n.listenFD)
 	if err != nil {
 		return
 	}
@@ -68,21 +67,21 @@ func accept() (nfd int, addr string, err error) {
 		return
 	}
 
-	err = addRead(nfd)
+	err = syscall.EpollCtl(n.epollFD, syscall.EPOLL_CTL_ADD, nfd, &syscall.EpollEvent{
+		Events: EpollRead,
+		Fd:     int32(nfd),
+	})
 	if err != nil {
 		return
 	}
-	addr = getAddr(sa)
+
+	s := sa.(*syscall.SockaddrInet4)
+	addr = fmt.Sprintf("%d.%d.%d.%d:%d", s.Addr[0], s.Addr[1], s.Addr[2], s.Addr[3], s.Port)
 	return
 }
 
-func getAddr(sa syscall.Sockaddr) string {
-	addr := sa.(*syscall.SockaddrInet4)
-	return fmt.Sprintf("%d.%d.%d.%d:%d", addr.Addr[0], addr.Addr[1], addr.Addr[2], addr.Addr[3], addr.Port)
-}
-
-func addRead(fd int) error {
-	err := syscall.EpollCtl(epollFD, syscall.EPOLL_CTL_ADD, fd, &syscall.EpollEvent{
+func (n *epoll) addRead(fd int) error {
+	err := syscall.EpollCtl(n.epollFD, syscall.EPOLL_CTL_ADD, fd, &syscall.EpollEvent{
 		Events: EpollRead,
 		Fd:     int32(fd),
 	})
@@ -92,9 +91,9 @@ func addRead(fd int) error {
 	return nil
 }
 
-func closeFD(fd int) error {
+func (n *epoll) closeFD(fd int) error {
 	// 移除文件描述符的监听
-	err := syscall.EpollCtl(epollFD, syscall.EPOLL_CTL_DEL, fd, nil)
+	err := syscall.EpollCtl(n.epollFD, syscall.EPOLL_CTL_DEL, fd, nil)
 	if err != nil {
 		return err
 	}
@@ -108,23 +107,15 @@ func closeFD(fd int) error {
 	return nil
 }
 
-func closeFDRead(fd int) error {
-	_, _, e := syscall.Syscall(syscall.SHUT_RD, uintptr(fd), 0, 0)
-	if e != 0 {
-		return e
-	}
-	return nil
-}
-
-func getEvents() ([]event, error) {
+func (n *epoll) getEvents() ([]event, error) {
 	epollEvents := make([]syscall.EpollEvent, 100)
-	n, err := syscall.EpollWait(epollFD, epollEvents, -1)
+	num, err := syscall.EpollWait(n.epollFD, epollEvents, -1)
 	if err != nil {
 		return nil, err
 	}
 
 	events := make([]event, 0, len(epollEvents))
-	for i := 0; i < n; i++ {
+	for i := 0; i < num; i++ {
 		event := event{
 			FD: epollEvents[i].Fd,
 		}
@@ -137,4 +128,12 @@ func getEvents() ([]event, error) {
 	}
 
 	return events, nil
+}
+
+func (n *epoll) closeFDRead(fd int) error {
+	_, _, e := syscall.Syscall(syscall.SHUT_RD, uintptr(fd), 0, 0)
+	if e != 0 {
+		return e
+	}
+	return nil
 }
