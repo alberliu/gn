@@ -3,6 +3,6 @@
 
 package gn
 
-func newNetpoll(address string) (*netpoll, error) {
+func newNetpoll(address string) (netpoll, error) {
 	panic("please run on linux")
 }
