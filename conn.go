@@ -8,22 +8,29 @@ import (
 
 // Conn 客户端长连接
 type Conn struct {
-	server       *Server     // 服务器引用
-	fd           int32       // 文件描述符
-	addr         string      // 对端地址
-	buffer       *Buffer     // 读缓存区
-	lastReadTime time.Time   // 最后一次读取数据的时间
-	data         interface{} // 业务自定义数据，用作扩展
+	server *Server     // 服务器引用
+	fd     int32       // 文件描述符
+	addr   string      // 对端地址
+	buffer *Buffer     // 读缓存区
+	timer  *time.Timer // 连接超时定时器
+	data   interface{} // 业务自定义数据，用作扩展
 }
 
 // newConn 创建tcp链接
 func newConn(fd int32, addr string, server *Server) *Conn {
+	var timer *time.Timer
+	if server.options.timeout != 0 {
+		timer = time.AfterFunc(server.options.timeout, func() {
+			server.handleTimeoutEvent(fd)
+		})
+	}
+
 	return &Conn{
-		server:       server,
-		fd:           fd,
-		addr:         addr,
-		buffer:       NewBuffer(server.readBufferPool.Get().([]byte)),
-		lastReadTime: time.Now(),
+		server: server,
+		fd:     fd,
+		addr:   addr,
+		buffer: NewBuffer(server.readBufferPool.Get().([]byte)),
+		timer:  timer,
 	}
 }
 
@@ -44,7 +51,10 @@ func (c *Conn) GetBuffer() *Buffer {
 
 // Read 读取数据
 func (c *Conn) Read() error {
-	c.lastReadTime = time.Now()
+	if c.server.options.timeout != 0 {
+		c.timer.Reset(c.server.options.timeout)
+	}
+
 	fd := int(c.GetFd())
 	for {
 		err := c.buffer.ReadFromFD(fd)
@@ -69,12 +79,14 @@ func (c *Conn) Write(bytes []byte) (int, error) {
 }
 
 // Close 关闭连接
-func (c *Conn) Close() error {
+func (c *Conn) Close() {
 	// 从epoll监听的文件描述符中删除
 	err := c.server.netpoll.closeFD(int(c.fd))
 	if err != nil {
 		log.Error(err)
 	}
+	// stop timer
+	c.timer.Stop()
 
 	// 从conns中删除conn
 	c.server.conns.Delete(c.fd)
@@ -82,7 +94,6 @@ func (c *Conn) Close() error {
 	c.server.readBufferPool.Put(c.buffer.GetBuf())
 	// 连接数减一
 	atomic.AddInt64(&c.server.connsNum, -1)
-	return nil
 }
 
 // CloseRead 关闭连接

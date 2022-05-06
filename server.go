@@ -28,7 +28,6 @@ type options struct {
 	acceptGNum      int           // 处理接受请求的goroutine数量
 	ioGNum          int           // 处理io的goroutine数量
 	ioEventQueueLen int           // io事件队列长度
-	timeoutTicker   time.Duration // 超时时间检查间隔
 	timeout         time.Duration // 超时时间
 }
 
@@ -91,16 +90,12 @@ func WithIOEventQueueLen(num int) Option {
 }
 
 // WithTimeout 设置TCP超时检查的间隔时间以及超时时间
-func WithTimeout(timeoutTicker, timeout time.Duration) Option {
+func WithTimeout(timeout time.Duration) Option {
 	return newFuncServerOption(func(o *options) {
-		if timeoutTicker <= 0 {
-			panic("timeoutTicker must greater than 0")
-		}
 		if timeout <= 0 {
 			panic("timeoutTicker must greater than 0")
 		}
 
-		o.timeoutTicker = timeoutTicker
 		o.timeout = timeout
 	})
 }
@@ -198,7 +193,6 @@ func (s *Server) Run() {
 	log.Info("gn server run")
 	s.startAccept()
 	s.startIOConsumer()
-	s.checkTimeout()
 	s.startIOProducer()
 }
 
@@ -314,28 +308,6 @@ func (s *Server) consumeIOEvent(queue chan event) {
 	}
 }
 
-// checkTimeout 定时检查超时的TCP长连接
-func (s *Server) checkTimeout() {
-	if s.options.timeout == 0 || s.options.timeoutTicker == 0 {
-		return
-	}
-	log.Info(fmt.Sprintf("check timeout goroutine run,check_time:%v,timeout:%v", s.options.timeoutTicker, s.options.timeout))
-	go func() {
-		ticker := time.NewTicker(s.options.timeoutTicker)
-		for {
-			select {
-			case <-s.stop:
-				return
-			case <-ticker.C:
-				s.conns.Range(func(key, value interface{}) bool {
-					c := value.(*Conn)
-
-					if time.Now().Sub(c.lastReadTime) > s.options.timeout {
-						s.handleEvent(event{FD: c.fd, Type: EventTimeout})
-					}
-					return true
-				})
-			}
-		}
-	}()
+func (s *Server) handleTimeoutEvent(fd int32) {
+	s.handleEvent(event{FD: fd, Type: EventTimeout})
 }
