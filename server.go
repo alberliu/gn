@@ -133,6 +133,7 @@ type event struct {
 
 // Server TCP服务
 type Server struct {
+	netpoll        netpoll      // 具体操作系统网络实现
 	options        *options     // 服务参数
 	readBufferPool *sync.Pool   // 读缓存区内存池
 	handler        Handler      // 注册的处理
@@ -157,7 +158,7 @@ func NewServer(address string, handler Handler, decoder Decoder, opts ...Option)
 	}
 
 	// 初始化epoll网络
-	err := listen(address)
+	netpoll, err := newNetpoll(address)
 	if err != nil {
 		log.Error(err)
 		return nil, err
@@ -170,6 +171,7 @@ func NewServer(address string, handler Handler, decoder Decoder, opts ...Option)
 	}
 
 	return &Server{
+		netpoll:        netpoll,
 		options:        options,
 		readBufferPool: readBufferPool,
 		handler:        handler,
@@ -228,7 +230,7 @@ func (s *Server) startIOProducer() {
 			log.Error("stop producer")
 			return
 		default:
-			events, err := getEvents()
+			events, err := s.netpoll.getEvents()
 			if err != nil {
 				log.Error(err)
 			}
@@ -254,7 +256,7 @@ func (s *Server) accept() {
 		case <-s.stop:
 			return
 		default:
-			nfd, addr, err := accept()
+			nfd, addr, err := s.netpoll.accept()
 			if err != nil {
 				log.Error(err)
 				continue
