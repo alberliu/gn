@@ -105,6 +105,11 @@ func (c *Conn) CloseRead() error {
 	return nil
 }
 
+// OnMessage 消息处理
+func (c *Conn) OnMessage(bytes []byte) {
+	c.server.handler.OnMessage(c, bytes)
+}
+
 // GetData 获取数据
 func (c *Conn) GetData() interface{} {
 	return c.data
