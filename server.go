@@ -179,15 +179,6 @@ func NewServer(address string, handler Handler, decoder Decoder, opts ...Option)
 	}, nil
 }
 
-// GetConn 获取Conn
-func (s *Server) GetConn(fd int32) (*Conn, bool) {
-	value, ok := s.conns.Load(fd)
-	if !ok {
-		return nil, false
-	}
-	return value.(*Conn), true
-}
-
 // Run 启动服务
 func (s *Server) Run() {
 	log.Info("gn server run")
