@@ -80,6 +80,12 @@ func (b *Buffer) Read(offset, limit int) ([]byte, error) {
 	return buf, nil
 }
 
+// ReadAll 读取所有字节
+func (b *Buffer) ReadAll() []byte {
+	buf, _ := b.Read(b.start, b.end)
+	return buf
+}
+
 // reset 重新设置缓存区（将有用字节前移）
 func (b *Buffer) reset() {
 	if b.start == 0 {

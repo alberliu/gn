@@ -20,25 +20,26 @@ var log = gn.GetLogger()
 
 var server *gn.Server
 
-var encoder = gn.NewHeaderLenEncoder(2, 1024)
+type Handler struct{}
 
-type Handler struct {}
-
-func (Handler) OnConnect(c *gn.Conn) {
+func (*Handler) OnConnect(c *gn.Conn) {
 	log.Info("connect:", c.GetFd(), c.GetAddr())
 }
-func (Handler) OnMessage(c *gn.Conn, bytes []byte) {
-	encoder.EncodeToFD(c.GetFd(), bytes)
+func (*Handler) OnMessage(c *gn.Conn, bytes []byte) {
+	c.WriteWithEncoder(bytes)
 	log.Info("read:", string(bytes))
 }
-func (Handler) OnClose(c *gn.Conn, err error) {
+func (*Handler) OnClose(c *gn.Conn, err error) {
 	log.Info("close:", c.GetFd(), err)
 }
 
 func main() {
 	var err error
-	server, err = gn.NewServer(":8080", Handler{}, gn.NewHeaderLenDecoder(2),
-		gn.WithTimeout(5*time.Second), gn.WithReadBufferLen(10))
+	server, err = gn.NewServer(":8080", &Handler{},
+		gn.WithDecoder(gn.NewHeaderLenDecoder(2)),
+		gn.WithEncoder(gn.NewHeaderLenEncoder(2, 1024)),
+		gn.WithTimeout(5*time.Second),
+		gn.WithReadBufferLen(10))
 	if err != nil {
 		log.Info("err")
 		return
@@ -46,4 +47,5 @@ func main() {
 
 	server.Run()
 }
+
 ```

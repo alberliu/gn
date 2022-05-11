@@ -6,17 +6,16 @@ import (
 	"fmt"
 	"io"
 	"sync"
-	"syscall"
 )
 
 // Decoder 解码器
 type Decoder interface {
-	Decode(c *Conn) error
+	Decode(*Buffer, func([]byte)) error
 }
 
 // Encoder 编码器
 type Encoder interface {
-	EncodeToFD(fd int32, bytes []byte) error
+	EncodeToWriter(w io.Writer, bytes []byte) error
 }
 
 type headerLenDecoder struct {
@@ -37,8 +36,7 @@ func NewHeaderLenDecoder(headerLen int) Decoder {
 }
 
 // Decode 解码
-func (d *headerLenDecoder) Decode(c *Conn) error {
-	buffer := c.GetBuffer()
+func (d *headerLenDecoder) Decode(buffer *Buffer, handle func([]byte)) error {
 	for {
 		header, err := buffer.Seek(d.headerLen)
 		if err == ErrNotEnough {
@@ -55,7 +53,7 @@ func (d *headerLenDecoder) Decode(c *Conn) error {
 			return nil
 		}
 
-		c.OnMessage(body)
+		handle(body)
 	}
 }
 
@@ -83,27 +81,6 @@ func NewHeaderLenEncoder(headerLen, writeBufferLen int) *headerLenEncoder {
 			},
 		},
 	}
-}
-
-// EncodeToFD 编码数据,并且写入文件描述符
-func (e headerLenEncoder) EncodeToFD(fd int32, bytes []byte) error {
-	l := len(bytes)
-	var buffer []byte
-	if l <= e.writeBufferLen-e.headerLen {
-		obj := e.writeBufferPool.Get()
-		defer e.writeBufferPool.Put(obj)
-		buffer = obj.([]byte)[0 : l+e.headerLen]
-	} else {
-		buffer = make([]byte, l+e.headerLen)
-	}
-
-	// 将消息长度写入buffer
-	binary.BigEndian.PutUint16(buffer[0:2], uint16(l))
-	// 将消息内容内容写入buffer
-	copy(buffer[e.headerLen:], bytes)
-
-	_, err := syscall.Write(int(fd), buffer)
-	return err
 }
 
 // EncodeToWriter 编码数据,并且写入Writer

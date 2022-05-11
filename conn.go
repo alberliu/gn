@@ -50,7 +50,7 @@ func (c *Conn) GetBuffer() *Buffer {
 }
 
 // Read 读取数据
-func (c *Conn) Read() error {
+func (c *Conn) read() error {
 	if c.server.options.timeout != 0 {
 		c.timer.Reset(c.server.options.timeout)
 	}
@@ -66,11 +66,23 @@ func (c *Conn) Read() error {
 			return err
 		}
 
-		err = c.server.decoder.Decode(c)
-		if err != nil {
-			return err
+		if c.server.options.decoder == nil {
+			c.server.handler.OnMessage(c, c.buffer.ReadAll())
+		} else {
+			var handle = func(bytes []byte) {
+				c.server.handler.OnMessage(c, bytes)
+			}
+			err = c.server.options.decoder.Decode(c.buffer, handle)
+			if err != nil {
+				return err
+			}
 		}
 	}
+}
+
+// WriteWithEncoder 使用编码器写入
+func (c *Conn) WriteWithEncoder(bytes []byte) error {
+	return c.server.options.encoder.EncodeToWriter(c, bytes)
 }
 
 // Write 写入数据
@@ -103,11 +115,6 @@ func (c *Conn) CloseRead() error {
 		log.Error(err)
 	}
 	return nil
-}
-
-// OnMessage 消息处理
-func (c *Conn) OnMessage(bytes []byte) {
-	c.server.handler.OnMessage(c, bytes)
 }
 
 // GetData 获取数据
