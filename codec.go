@@ -44,7 +44,7 @@ func (d *headerLenDecoder) Decode(buffer *Buffer, handle func([]byte)) error {
 		}
 		bodyLen := int(binary.BigEndian.Uint16(header))
 		// 检查valueLen合法性
-		if bodyLen > buffer.Cap()-d.headerLen {
+		if bodyLen == 0 || bodyLen > buffer.Cap()-d.headerLen {
 			return errors.New(fmt.Sprintf("illegal body length %d", bodyLen))
 		}
 

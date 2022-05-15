@@ -18,8 +18,6 @@ import (
 
 var log = gn.GetLogger()
 
-var server *gn.Server
-
 type Handler struct{}
 
 func (*Handler) OnConnect(c *gn.Conn) {
@@ -35,7 +33,7 @@ func (*Handler) OnClose(c *gn.Conn, err error) {
 
 func main() {
 	var err error
-	server, err = gn.NewServer(":8080", &Handler{},
+	server, err := gn.NewServer(":8080", &Handler{},
 		gn.WithDecoder(gn.NewHeaderLenDecoder(2)),
 		gn.WithEncoder(gn.NewHeaderLenEncoder(2, 1024)),
 		gn.WithTimeout(5*time.Second),
@@ -47,5 +45,4 @@ func main() {
 
 	server.Run()
 }
-
 ```
