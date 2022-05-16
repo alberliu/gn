@@ -22,7 +22,6 @@ func (*Handler) OnClose(c *gn.Conn, err error) {
 }
 
 func main() {
-	var err error
 	server, err := gn.NewServer(":8080", &Handler{},
 		gn.WithDecoder(gn.NewHeaderLenDecoder(2)),
 		gn.WithEncoder(gn.NewHeaderLenEncoder(2, 1024)),
