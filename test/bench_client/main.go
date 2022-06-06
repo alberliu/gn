@@ -1,14 +1,17 @@
 package main
 
 import (
-	"github.com/alberliu/gn/util"
+	"github.com/alberliu/gn/codec"
 	"log"
 	"net"
 	"strconv"
 	"time"
 )
 
-var codecFactory = util.NewHeaderLenCodecFactory(2, 1024)
+var (
+	decoder = codec.NewHeaderLenDecoder(2)
+	encoder = codec.NewHeaderLenEncoder(2, 1024)
+)
 
 func main() {
 	var conns []net.Conn
@@ -30,7 +33,7 @@ func main() {
 	for {
 		for i := range conns {
 			time.Sleep(time.Millisecond * 3)
-			_, err := conns[i].Write(util.Encode([]byte(strconv.FormatInt(time.Now().UnixNano(), 10))))
+			err := encoder.EncodeToWriter(conns[i], []byte(strconv.FormatInt(time.Now().UnixNano(), 10)))
 			if err != nil {
 				log.Println("error dialing", err.Error())
 			}
@@ -41,20 +44,22 @@ func main() {
 }
 
 func handleConn(conn net.Conn) {
-	codec := codecFactory.NewCodec(conn)
+	buffer := codec.NewBuffer(make([]byte, 1024))
+	var handler = func(bytes []byte) {
+		log.Println(string(bytes))
+	}
+
 	for {
-		_, err := codec.Read()
+		_, err := buffer.ReadFromReader(conn)
 		if err != nil {
 			log.Println("error", err)
 			return
 		}
-		for {
-			bytes, err := codec.Read()
-			if err != nil {
-				log.Println(err)
-				return
-			}
-			log.Println(string(bytes))
+
+		err = decoder.Decode(buffer, handler)
+		if err != nil {
+			log.Println(err)
+			return
 		}
 	}
 }

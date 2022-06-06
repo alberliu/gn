@@ -2,6 +2,7 @@ package main
 
 import (
 	"github.com/alberliu/gn"
+	"github.com/alberliu/gn/codec"
 
 	"time"
 )
@@ -23,8 +24,8 @@ func (*Handler) OnClose(c *gn.Conn, err error) {
 
 func main() {
 	server, err := gn.NewServer(":8080", &Handler{},
-		gn.WithDecoder(gn.NewHeaderLenDecoder(2)),
-		gn.WithEncoder(gn.NewHeaderLenEncoder(2, 1024)),
+		gn.WithDecoder(codec.NewHeaderLenDecoder(2)),
+		gn.WithEncoder(codec.NewHeaderLenEncoder(2, 1024)),
 		gn.WithTimeout(5*time.Second),
 		gn.WithReadBufferLen(10))
 	if err != nil {

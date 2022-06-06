@@ -1,14 +1,15 @@
 package gn
 
 import (
+	"github.com/alberliu/gn/codec"
 	"runtime"
 	"time"
 )
 
 // options Server初始化参数
 type options struct {
-	decoder         Decoder       // 解码器
-	encoder         Encoder       // 编码器
+	decoder         codec.Decoder // 解码器
+	encoder         codec.Encoder // 编码器
 	readBufferLen   int           // 所读取的客户端包的最大长度，客户端发送的包不能超过这个长度，默认值是1024字节
 	acceptGNum      int           // 处理接受请求的goroutine数量
 	ioGNum          int           // 处理io的goroutine数量
@@ -35,14 +36,14 @@ func newFuncServerOption(f func(*options)) *funcServerOption {
 }
 
 // WithDecoder 设置解码器
-func WithDecoder(decoder Decoder) Option {
+func WithDecoder(decoder codec.Decoder) Option {
 	return newFuncServerOption(func(o *options) {
 		o.decoder = decoder
 	})
 }
 
 // WithEncoder 设置解码器
-func WithEncoder(encoder Encoder) Option {
+func WithEncoder(encoder codec.Encoder) Option {
 	return newFuncServerOption(func(o *options) {
 		o.encoder = encoder
 	})

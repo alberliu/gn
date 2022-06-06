@@ -1,6 +1,7 @@
 package gn
 
 import (
+	"github.com/alberliu/gn/codec"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -8,12 +9,12 @@ import (
 
 // Conn 客户端长连接
 type Conn struct {
-	server *Server     // 服务器引用
-	fd     int32       // 文件描述符
-	addr   string      // 对端地址
-	buffer *Buffer     // 读缓存区
-	timer  *time.Timer // 连接超时定时器
-	data   interface{} // 业务自定义数据，用作扩展
+	server *Server       // 服务器引用
+	fd     int32         // 文件描述符
+	addr   string        // 对端地址
+	buffer *codec.Buffer // 读缓存区
+	timer  *time.Timer   // 连接超时定时器
+	data   interface{}   // 业务自定义数据，用作扩展
 }
 
 // newConn 创建tcp链接
@@ -29,7 +30,7 @@ func newConn(fd int32, addr string, server *Server) *Conn {
 		server: server,
 		fd:     fd,
 		addr:   addr,
-		buffer: NewBuffer(server.readBufferPool.Get().([]byte)),
+		buffer: codec.NewBuffer(server.readBufferPool.Get().([]byte)),
 		timer:  timer,
 	}
 }
@@ -45,7 +46,7 @@ func (c *Conn) GetAddr() string {
 }
 
 // GetBuffer 获取客户端地址
-func (c *Conn) GetBuffer() *Buffer {
+func (c *Conn) GetBuffer() *codec.Buffer {
 	return c.buffer
 }
 
@@ -85,7 +86,7 @@ func (c *Conn) WriteWithEncoder(bytes []byte) error {
 	return c.server.options.encoder.EncodeToWriter(c, bytes)
 }
 
-// Write 写入数据
+// Write 写入数据 todo 这里可能未能把所有数据写进去
 func (c *Conn) Write(bytes []byte) (int, error) {
 	return syscall.Write(int(c.fd), bytes)
 }
