@@ -1,6 +1,6 @@
 # gn
 ### 简述
-gn是一个基于linux下epoll的网络框架，目前只能运行在Linux下环境，gn可以配置处理网络事件的goroutine数量，相比golang原生库，在海量链接下，可以减少goroutine的开销，从而减少系统资源占用。
+gn是一个基于linux下epoll的网络框架，目前只能运行在Linux环境下，gn可以配置处理网络事件的goroutine数量，相比golang原生库，在海量链接下，可以减少goroutine的开销，从而减少系统资源占用。
 ### 支持功能
 1.tcp拆包粘包  
 支持多种编解码方式，使用sync.pool申请读写使用的字节数组，减少内存申请开销以及GC压力。  
