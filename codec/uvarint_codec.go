@@ -20,16 +20,16 @@ func NewUvarintDecoder() Decoder {
 func (d *uvarintDecoder) Decode(buffer *Buffer, handle func([]byte)) error {
 	for {
 		bytes := buffer.GetBuf()
-		bodyLen, n := binary.Uvarint(bytes)
-		if n == 0 {
+		bodyLen, headerLen := binary.Uvarint(bytes)
+		if headerLen == 0 {
 			return nil
 		}
 
 		// 检查valueLen合法性
-		if int(bodyLen) > buffer.Cap()-n {
+		if int(bodyLen)+headerLen > buffer.Cap() {
 			return errors.New(fmt.Sprintf("illegal body length %d", bodyLen))
 		}
-		body, err := buffer.Read(n, int(bodyLen))
+		body, err := buffer.Read(headerLen, int(bodyLen))
 		if err == ErrNotEnough {
 			return nil
 		}
@@ -76,7 +76,7 @@ func (e uvarintEncoder) EncodeToWriter(w io.Writer, bytes []byte) error {
 
 	var buffer []byte
 	l := uvarintLen + len(bytes)
-	if l > e.writeBufferLen {
+	if l <= e.writeBufferLen {
 		obj := e.writeBufferPool.Get()
 		defer e.writeBufferPool.Put(obj)
 		buffer = obj.([]byte)[0:l]

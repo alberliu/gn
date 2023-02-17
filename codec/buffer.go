@@ -31,7 +31,7 @@ func (b *Buffer) Cap() int {
 }
 
 func (b *Buffer) GetBuf() []byte {
-	return b.buf
+	return b.buf[b.start:b.end]
 }
 
 // ReadFromFD 从文件描述符里面读取数据
@@ -69,7 +69,7 @@ func (b *Buffer) Seek(len int) ([]byte, error) {
 	return nil, ErrNotEnough
 }
 
-// Read 舍弃offset个字段，读取n个字段,如果没有足够的字节，返回错误
+// Read 舍弃offset个字段，读取n个字段,如果没有足够的字节，调用reset之后，返回的字节数组失效
 func (b *Buffer) Read(offset, limit int) ([]byte, error) {
 	if b.Len() < offset+limit {
 		return nil, ErrNotEnough

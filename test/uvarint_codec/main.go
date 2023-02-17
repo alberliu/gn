@@ -3,6 +3,7 @@ package main
 import (
 	"github.com/alberliu/gn"
 	"github.com/alberliu/gn/codec"
+	"math"
 	"net"
 	"strconv"
 	"time"
@@ -10,7 +11,7 @@ import (
 
 var (
 	decoder = codec.NewUvarintDecoder()
-	encoder = codec.NewUvarintEncoder(1024)
+	encoder = codec.NewUvarintEncoder(5)
 )
 
 var log = gn.GetLogger()
@@ -33,7 +34,7 @@ func startServer() {
 		gn.WithDecoder(decoder),
 		gn.WithEncoder(encoder),
 		gn.WithTimeout(5*time.Second),
-		gn.WithReadBufferLen(10))
+		gn.WithReadBufferLen(100))
 	if err != nil {
 		log.Info("err")
 		return
@@ -74,12 +75,17 @@ func startClient(i int) {
 	}()
 
 	for i := 0; i < 10; i++ {
-		err := encoder.EncodeToWriter(conn, []byte("hello"+strconv.Itoa(i)))
+		err := encoder.EncodeToWriter(conn, []byte("hello, gn "+powAndString(10, i)))
 		if err != nil {
 			log.Error(err)
 			return
 		}
 	}
+}
+
+func powAndString(x, y int) string {
+	r := math.Pow(float64(x), float64(y))
+	return strconv.Itoa(int(r))
 }
 
 func batchStartClient() {
