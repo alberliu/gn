@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"github.com/alberliu/gn"
 	"github.com/alberliu/gn/codec"
 	"math"
@@ -33,7 +34,7 @@ func startServer() {
 	server, err := gn.NewServer(":8080", &Handler{},
 		gn.WithDecoder(decoder),
 		gn.WithEncoder(encoder),
-		gn.WithTimeout(5*time.Second),
+		gn.WithTimeout(1*time.Second),
 		gn.WithReadBufferLen(100))
 	if err != nil {
 		log.Info("err")
@@ -74,7 +75,7 @@ func startClient(i int) {
 		}
 	}()
 
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 3; i++ {
 		err := encoder.EncodeToWriter(conn, []byte("hello, gn "+powAndString(10, i)))
 		if err != nil {
 			log.Error(err)
@@ -89,8 +90,10 @@ func powAndString(x, y int) string {
 }
 
 func batchStartClient() {
-	for i := 0; i < 1; i++ {
+	for i := 0; i < 6; i++ {
 		go startClient(i)
+		time.Sleep(2 * time.Second)
+		fmt.Printf("\n\n\n\n")
 	}
 }
 

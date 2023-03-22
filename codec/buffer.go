@@ -30,8 +30,12 @@ func (b *Buffer) Cap() int {
 	return len(b.buf)
 }
 
-func (b *Buffer) GetBuf() []byte {
+func (b *Buffer) GetBytes() []byte {
 	return b.buf[b.start:b.end]
+}
+
+func (b *Buffer) GetBuf() []byte {
+	return b.buf
 }
 
 // ReadFromFD 从文件描述符里面读取数据

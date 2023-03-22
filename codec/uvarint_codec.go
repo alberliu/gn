@@ -19,7 +19,7 @@ func NewUvarintDecoder() Decoder {
 // Decode 解码
 func (d *uvarintDecoder) Decode(buffer *Buffer, handle func([]byte)) error {
 	for {
-		bytes := buffer.GetBuf()
+		bytes := buffer.GetBytes()
 		bodyLen, headerLen := binary.Uvarint(bytes)
 		if headerLen == 0 {
 			return nil
