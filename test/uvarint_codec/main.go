@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"github.com/alberliu/gn"
 	"github.com/alberliu/gn/codec"
@@ -44,43 +45,75 @@ func startServer() {
 	server.Run()
 }
 
-var space = "                          client:"
-
 func startClient(i int) {
+	var sends, receives [][]byte
+
 	conn, err := net.Dial("tcp", "127.0.0.1:8080")
 	if err != nil {
-		log.Info(space, i, "error dialing", err.Error())
+		log.Info(i, "error dialing", err.Error())
 		return // 终止程序
 	}
 
 	buffer := codec.NewBuffer(make([]byte, 1024))
-
 	var handler = func(bytes []byte) {
-		log.Info(space, i, " ", string(bytes))
+		// 需要制作一个拷贝
+		c := make([]byte, len(bytes))
+		copy(c, bytes)
+		receives = append(receives, c)
 	}
 
 	go func() {
 		for {
 			_, err := buffer.ReadFromReader(conn)
 			if err != nil {
-				log.Error(space, i, " ", err)
+				log.Error(i, " ", err)
+
+				// 结束时对比
+				if !equal(sends, receives) {
+					display(sends)
+					display(receives)
+					panic(fmt.Sprintf("not equal: %d", i))
+				} else {
+					log.Error("equal", i)
+				}
 				return
 			}
 
 			err = decoder.Decode(buffer, handler)
 			if err != nil {
-				log.Error(space, i, " ", err)
+				log.Error(i, " ", err)
 				return
 			}
 		}
 	}()
 
 	for i := 0; i < 3; i++ {
-		err := encoder.EncodeToWriter(conn, []byte("hello, gn "+powAndString(10, i)))
+		send := []byte("hello, gn " + powAndString(10, i))
+		sends = append(sends, send)
+		err := encoder.EncodeToWriter(conn, send)
 		if err != nil {
 			log.Error(err)
 			return
 		}
+	}
+}
+
+func equal(a, b [][]byte) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if !bytes.Equal(a[i], b[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+func display(a [][]byte) {
+	log.Info("len:", len(a))
+	for i := range a {
+		log.Info(string(a[i]))
 	}
 }
 
@@ -90,19 +123,17 @@ func powAndString(x, y int) string {
 }
 
 func batchStartClient() {
-	for i := 0; i < 6; i++ {
+	for i := 0; i < 20; i++ {
+		fmt.Printf("\n\n\n\n")
 		go startClient(i)
 		time.Sleep(2 * time.Second)
-		fmt.Printf("\n\n\n\n")
 	}
 }
 
 func main() {
 	go startServer()
-
 	time.Sleep(1 * time.Second)
 
 	go batchStartClient()
-
 	select {}
 }
