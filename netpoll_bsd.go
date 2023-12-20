@@ -11,8 +11,8 @@ import (
 )
 
 const (
-	EpollRead  = syscall.EV_ADD | syscall.EV_EOF
-	EpollClose = uint16(syscall.EV_EOF)
+	EpollRead  = syscall.EV_ADD
+	EpollClose = syscall.EV_ADD | syscall.EV_EOF
 )
 
 type epoll struct {
